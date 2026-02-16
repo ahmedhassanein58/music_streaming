@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 class Player extends StatefulWidget {
-  const Player({ Key? key }) : super(key: key);
-
+  Player({Key? key, required this.song}) : super(key: key);
+  final dynamic song;
   @override
   _PlayerState createState() => _PlayerState();
 }
@@ -10,8 +10,6 @@ class Player extends StatefulWidget {
 class _PlayerState extends State<Player> {
   @override
   Widget build(BuildContext context) {
-    return Container(
-      
-    );
+    return Container();
   }
 }
