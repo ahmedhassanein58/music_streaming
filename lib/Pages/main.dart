@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:music_client/home.dart';
+import 'package:music_client/Pages/home.dart';
+import 'package:music_client/audio_service_manager.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AudioServiceManager.init();
   runApp(const MyApp());
 }
 

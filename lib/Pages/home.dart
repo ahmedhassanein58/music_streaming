@@ -3,7 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:music_client/player.dart';
+import 'package:music_client/Pages/player.dart';
 
 class HomePage extends StatefulWidget {
   HomePage({super.key, required this.title});
