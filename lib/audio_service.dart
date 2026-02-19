@@ -4,14 +4,35 @@ import "package:just_audio/just_audio.dart";
 import "package:audio_session/audio_session.dart";
 
 class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
+  static AppAudioHandler? _instance;
   final _player = AudioPlayer();
 
+  static AppAudioHandler get instance {
+    if (_instance == null) {
+      throw StateError("AppAudioHandler not initialized");
+    }
+    return _instance!;
+  }
+
+  static Future<AppAudioHandler> init() async {
+    if (_instance != null) return _instance!;
+
+    final handler = await AudioService.init(
+      builder: () => AppAudioHandler._internal(),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'com.echonova.musicplayer.channel.audio',
+        androidNotificationChannelName: 'Music playback',
+      ),
+    );
+    _instance = handler;
+    return _instance!;
+  }
   
-  AppAudioHandler() {
+  AppAudioHandler._internal() {
     _init();
     // Broadcast state on events (buffering, error, etc)
     _player.playbackEventStream.listen(_broadcastState, onError: (Object e, StackTrace stackTrace) {
-      print('Audio Player Error: $e');
+      // print('Audio Player Error: $e');
     });
     // Also broadcast on play/pause state changes
     _player.playerStateStream.listen((state) {

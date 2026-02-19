@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:music_client/audio_service_manager.dart';
+import 'package:music_client/audio_service.dart';
 import 'package:audio_service/audio_service.dart';
 
 class Player extends StatelessWidget {
@@ -7,33 +7,7 @@ class Player extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final audioHandler = AudioServiceManager.audioHandler;
-    
-    if (audioHandler == null) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text(
-                "Audio service not available",
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.grey[600],
-                ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Go Back'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+    final audioHandler = AppAudioHandler.instance;
     
     return Scaffold(
       body: Container(
