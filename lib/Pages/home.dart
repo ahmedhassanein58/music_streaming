@@ -127,7 +127,7 @@ class _HomePageState extends State<HomePage> {
         centerTitle: true,
         elevation: 0,
       ),
-      body: _buildBody(),
+      body: _buildBody()
     );
   }
 
