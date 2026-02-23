@@ -16,8 +16,8 @@ class Player extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              Theme.of(context).colorScheme.secondary.withOpacity(0.1),
+              Theme.of(context).colorScheme.primary.withValues(alpha:0.1),
+              Theme.of(context).colorScheme.secondary.withValues(alpha:0.1),
             ],
           ),
         ),
@@ -76,7 +76,7 @@ class Player extends StatelessWidget {
                           decoration: BoxDecoration(
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
+                                color: Colors.black.withValues(alpha: 0.3),
                                 blurRadius: 30,
                                 spreadRadius: 5,
                               ),
@@ -168,7 +168,7 @@ class Player extends StatelessWidget {
                           stream: Stream.periodic(const Duration(milliseconds: 100)).map((_) {
                             final state = audioHandler.playbackState.value;
                             final playing = state.playing;
-                            final position = state.position;
+                            final position = state.updatePosition;
                             if (playing) {
                               return position + (DateTime.now().difference(state.updateTime)) * state.speed;
                             }
