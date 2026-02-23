@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:music_client/Pages/player.dart';
 import 'package:music_client/audio_service.dart';
@@ -112,9 +113,7 @@ class _HomePageState extends State<HomePage> {
       });
 
       if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const Player()),
-        );
+        context.push('/player');
       }
     } catch (e) {
       if (mounted) {
@@ -194,6 +193,7 @@ class _HomePageState extends State<HomePage> {
           const _NowPlayingBar(),
         ],
       ),
+      bottomNavigationBar: const MainBottomNavigationBar(),
     );
   }
 
@@ -421,9 +421,7 @@ class _NowPlayingBar extends StatelessWidget {
               color: Theme.of(context).cardColor,
               child: InkWell(
                 onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const Player()),
-                  );
+                  context.push('/player');
                 },
                 child: Container(
                   padding:
@@ -501,6 +499,64 @@ class _NowPlayingBar extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class MainBottomNavigationBar extends StatelessWidget {
+  const MainBottomNavigationBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final String location = GoRouterState.of(context).uri.toString();
+
+    int currentIndex = 0;
+    if (location.startsWith('/search')) {
+      currentIndex = 1;
+    } else if (location.startsWith('/library')) {
+      currentIndex = 2;
+    } else {
+      currentIndex = 0;
+    }
+
+    return BottomNavigationBar(
+      type: BottomNavigationBarType.fixed,
+      currentIndex: currentIndex,
+      onTap: (index) {
+        switch (index) {
+          case 0:
+            context.go('/');
+            break;
+          case 1:
+            context.go('/search');
+            break;
+          case 2:
+            context.go('/library');
+            break;
+          case 3:
+            // "Create collection" button: for now, navigate to Library
+            context.go('/library');
+            break;
+        }
+      },
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home_outlined),
+          label: 'Home',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.search),
+          label: 'Search',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.library_music_outlined),
+          label: 'Library',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.add),
+          label: 'Create',
+        ),
+      ],
     );
   }
 }

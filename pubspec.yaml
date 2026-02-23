@@ -38,6 +38,7 @@ dependencies:
   http: ^1.6.0
   just_audio: ^0.10.5
   audio_session: ^0.2.2
+  go_router: ^17.1.0
 
 dev_dependencies:
   flutter_test:

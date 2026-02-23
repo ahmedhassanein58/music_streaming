@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:music_client/audio_service.dart';
 import 'package:audio_service/audio_service.dart';
 
@@ -55,7 +56,7 @@ class Player extends StatelessWidget {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.arrow_back),
-                          onPressed: () => Navigator.of(context).pop(),
+                          onPressed: () => context.pop(),
                         ),
                         const Spacer(),
                         IconButton(
