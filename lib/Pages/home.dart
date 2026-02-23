@@ -4,7 +4,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:music_client/Pages/player.dart';
 import 'package:music_client/audio_service.dart';
 import 'package:audio_service/audio_service.dart';
 
@@ -184,8 +183,6 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
-        centerTitle: true,
-        elevation: 0,
       ),
       body: Column(
         children: [
@@ -242,7 +239,10 @@ class LoadingView extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             'Loading songs...',
-            style: TextStyle(color: Colors.grey[600]),
+            style: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 14,
+            ),
           ),
         ],
       ),
@@ -261,11 +261,15 @@ class ErrorView extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+          Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
           const SizedBox(height: 16),
           Text(
             'Failed to load songs',
-            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[300],
+              fontWeight: FontWeight.w500,
+            ),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
@@ -290,11 +294,15 @@ class EmptyView extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.music_off, size: 64, color: Colors.grey[400]),
+          Icon(Icons.music_off, size: 64, color: Colors.grey[500]),
           const SizedBox(height: 16),
           Text(
             'No songs found',
-            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[300],
+              fontWeight: FontWeight.w500,
+            ),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
@@ -324,11 +332,11 @@ class SongTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      elevation: 2,
-      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 0,
+      color: Colors.white.withOpacity(0.03),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: Image.network(
@@ -348,7 +356,11 @@ class SongTile extends StatelessWidget {
         ),
         title: Text(
           song['title'] ?? 'Unknown Title',
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+            color: Colors.white,
+          ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -356,17 +368,24 @@ class SongTile extends StatelessWidget {
           song['artist']?['name'] ?? 'Unknown Artist',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey[400],
+          ),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: const Icon(Icons.play_circle_outline),
+              icon: const Icon(Icons.play_circle_fill),
               color: Theme.of(context).colorScheme.primary,
               onPressed: onTap,
             ),
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
+              icon: Icon(
+                Icons.more_vert,
+                color: Colors.grey[300],
+              ),
               onSelected: (value) {
                 if (value == 'add_to_queue') {
                   onAddToQueue();
@@ -417,15 +436,15 @@ class _NowPlayingBar extends StatelessWidget {
             }
 
             return Material(
-              elevation: 8,
-              color: Theme.of(context).cardColor,
+            elevation: 12,
+            color: const Color(0xFF050814),
               child: InkWell(
                 onTap: () {
                   context.push('/player');
                 },
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   child: Row(
                     children: [
                       ClipRRect(
@@ -457,6 +476,8 @@ class _NowPlayingBar extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: Colors.white,
                               ),
                             ),
                             if (mediaItem.artist != null)
@@ -466,7 +487,7 @@ class _NowPlayingBar extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey[600],
+                                  color: Colors.grey[400],
                                 ),
                               ),
                           ],
@@ -475,8 +496,10 @@ class _NowPlayingBar extends StatelessWidget {
                       const SizedBox(width: 12),
                       IconButton(
                         icon: Icon(
-                          isPlaying ? Icons.pause : Icons.play_arrow,
+                          isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          size: 26,
                         ),
+                        color: Colors.white,
                         onPressed: () {
                           if (isPlaying) {
                             audioHandler.pause();
@@ -486,7 +509,11 @@ class _NowPlayingBar extends StatelessWidget {
                         },
                       ),
                       IconButton(
-                        icon: const Icon(Icons.skip_next),
+                        icon: const Icon(
+                          Icons.skip_next_rounded,
+                          size: 24,
+                        ),
+                        color: Colors.white,
                         onPressed: () {
                           audioHandler.skipToNext();
                         },

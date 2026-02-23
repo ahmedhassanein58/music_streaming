@@ -12,13 +12,13 @@ class Player extends StatelessWidget {
     
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
             colors: [
-              Theme.of(context).colorScheme.primary.withValues(alpha:0.1),
-              Theme.of(context).colorScheme.secondary.withValues(alpha:0.1),
+              Color(0xFF020617),
+              Color(0xFF020617),
             ],
           ),
         ),
@@ -55,7 +55,7 @@ class Player extends StatelessWidget {
                     child: Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.arrow_back),
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded),
                           onPressed: () => context.pop(),
                         ),
                         const Spacer(),
@@ -75,16 +75,18 @@ class Player extends StatelessWidget {
                         Container(
                           margin: const EdgeInsets.symmetric(horizontal: 32),
                           decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(24),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 30,
-                                spreadRadius: 5,
+                                color: Colors.blue.withOpacity(0.4),
+                                blurRadius: 40,
+                                spreadRadius: 2,
+                                offset: const Offset(0, 20),
                               ),
                             ],
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(24),
                             child: Image.network(
                               mediaItem.artUri?.toString() ?? '',
                               width: double.infinity,
@@ -95,7 +97,7 @@ class Player extends StatelessWidget {
                                 return Container(
                                   width: double.infinity,
                                   height: 350,
-                                  color: Colors.grey[200],
+                                  color: const Color(0xFF020617),
                                   child: Center(
                                     child: CircularProgressIndicator(
                                       value: loadingProgress.expectedTotalBytes != null
@@ -112,9 +114,11 @@ class Player extends StatelessWidget {
                                   height: 350,
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
                                       colors: [
-                                        Colors.blue[300]!,
-                                        Colors.purple[300]!,
+                                        Colors.blue[700]!,
+                                        Colors.indigo[900]!,
                                       ],
                                     ),
                                   ),
@@ -141,6 +145,7 @@ class Player extends StatelessWidget {
                                 style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
+                                  color: Colors.white,
                                 ),
                                 textAlign: TextAlign.center,
                                 maxLines: 2,
@@ -152,7 +157,7 @@ class Player extends StatelessWidget {
                                   mediaItem.artist!,
                                   style: TextStyle(
                                     fontSize: 16,
-                                    color: Colors.grey[600],
+                                    color: Colors.grey[400],
                                   ),
                                   textAlign: TextAlign.center,
                                   maxLines: 1,
@@ -184,6 +189,9 @@ class Player extends StatelessWidget {
                                       thumbShape: const RoundSliderThumbShape(
                                         enabledThumbRadius: 8,
                                       ),
+                                      activeTrackColor: Theme.of(context).colorScheme.primary,
+                                      inactiveTrackColor: Colors.grey[700],
+                                      thumbColor: Theme.of(context).colorScheme.primary,
                                     ),
                                     child: Slider(
                                       value: clampedPosition.inMilliseconds.toDouble().clamp(
@@ -205,14 +213,14 @@ class Player extends StatelessWidget {
                                           _formatDuration(clampedPosition),
                                           style: TextStyle(
                                             fontSize: 12,
-                                            color: Colors.grey[600],
+                                            color: Colors.grey[400],
                                           ),
                                         ),
                                         Text(
                                           _formatDuration(duration),
                                           style: TextStyle(
                                             fontSize: 12,
-                                            color: Colors.grey[600],
+                                            color: Colors.grey[400],
                                           ),
                                         ),
                                       ],
