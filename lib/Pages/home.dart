@@ -98,9 +98,19 @@ class _HomePageState extends State<HomePage> {
         artUri: Uri.parse(song['album']?['cover_medium'] ?? ''),
         duration: Duration(seconds: song['duration'] ?? 30),
       );
-      
-      await handler.playMediaItem(mediaItem);
-      
+
+      // Start playback without blocking navigation to the player.
+      handler.playMediaItem(mediaItem).catchError((e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error playing song: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      });
+
       if (mounted) {
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const Player()),
@@ -119,6 +129,57 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _addToQueue(Map<String, dynamic> song) async {
+    final previewUrl = song['preview'];
+
+    if (previewUrl == null || previewUrl.toString().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Preview not available for this song'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final handler = AppAudioHandler.instance;
+      final mediaItem = MediaItem(
+        id: previewUrl,
+        title: song['title'] ?? 'Unknown Title',
+        artist: song['artist']?['name'] ?? 'Unknown Artist',
+        album: song['album']?['title'] ?? 'Unknown Album',
+        artUri: Uri.parse(song['album']?['cover_medium'] ?? ''),
+        duration: Duration(seconds: song['duration'] ?? 30),
+      );
+
+      await handler.addQueueItem(mediaItem);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Added to queue'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding to queue: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -127,7 +188,12 @@ class _HomePageState extends State<HomePage> {
         centerTitle: true,
         elevation: 0,
       ),
-      body: _buildBody()
+      body: Column(
+        children: [
+          Expanded(child: _buildBody()),
+          const _NowPlayingBar(),
+        ],
+      ),
     );
   }
 
@@ -151,6 +217,7 @@ class _HomePageState extends State<HomePage> {
           return SongTile(
             song: song,
             onTap: () => _playSong(song),
+            onAddToQueue: () => _addToQueue(song),
           );
         },
       ),
@@ -244,8 +311,14 @@ class EmptyView extends StatelessWidget {
 class SongTile extends StatelessWidget {
   final Map<String, dynamic> song;
   final VoidCallback onTap;
+  final VoidCallback onAddToQueue;
 
-  const SongTile({super.key, required this.song, required this.onTap});
+  const SongTile({
+    super.key,
+    required this.song,
+    required this.onTap,
+    required this.onAddToQueue,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -284,12 +357,150 @@ class SongTile extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: Icon(
-          Icons.play_circle_outline,
-          color: Theme.of(context).colorScheme.primary,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.play_circle_outline),
+              color: Theme.of(context).colorScheme.primary,
+              onPressed: onTap,
+            ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              onSelected: (value) {
+                if (value == 'add_to_queue') {
+                  onAddToQueue();
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem<String>(
+                  value: 'add_to_queue',
+                  child: Text('Add to queue'),
+                ),
+              ],
+            ),
+          ],
         ),
         onTap: onTap,
       ),
+    );
+  }
+}
+
+class _NowPlayingBar extends StatelessWidget {
+  const _NowPlayingBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final audioHandler = AppAudioHandler.instance;
+
+    return StreamBuilder<MediaItem?>(
+      stream: audioHandler.mediaItem,
+      builder: (context, mediaSnapshot) {
+        final mediaItem = mediaSnapshot.data;
+        if (mediaItem == null) {
+          return const SizedBox.shrink();
+        }
+
+        return StreamBuilder<PlaybackState>(
+          stream: audioHandler.playbackState,
+          builder: (context, playbackSnapshot) {
+            final playbackState = playbackSnapshot.data;
+            final isPlaying = playbackState?.playing ?? false;
+            final processingState =
+                playbackState?.processingState ?? AudioProcessingState.idle;
+
+            // Only show bar when we have something meaningful to control.
+            if (processingState == AudioProcessingState.idle &&
+                !isPlaying) {
+              return const SizedBox.shrink();
+            }
+
+            return Material(
+              elevation: 8,
+              color: Theme.of(context).cardColor,
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const Player()),
+                  );
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          mediaItem.artUri?.toString() ?? '',
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 48,
+                              height: 48,
+                              color: Colors.grey[300],
+                              child: const Icon(Icons.music_note),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              mediaItem.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (mediaItem.artist != null)
+                              Text(
+                                mediaItem.artist!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      IconButton(
+                        icon: Icon(
+                          isPlaying ? Icons.pause : Icons.play_arrow,
+                        ),
+                        onPressed: () {
+                          if (isPlaying) {
+                            audioHandler.pause();
+                          } else {
+                            audioHandler.play();
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.skip_next),
+                        onPressed: () {
+                          audioHandler.skipToNext();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

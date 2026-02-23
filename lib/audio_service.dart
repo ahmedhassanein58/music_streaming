@@ -6,6 +6,8 @@ import "package:audio_session/audio_session.dart";
 class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   static AppAudioHandler? _instance;
   final _player = AudioPlayer();
+  final List<MediaItem> _queue = [];
+  int _currentIndex = -1;
 
   static AppAudioHandler get instance {
     if (_instance == null) {
@@ -76,7 +78,7 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   
   void _broadcastState([PlaybackEvent? event]) {
     final playing = _player.playing;
-    final queueIndex = event?.currentIndex ?? _player.currentIndex;
+    final queueIndex = _currentIndex >= 0 ? _currentIndex : null;
     
     playbackState.add(playbackState.value.copyWith(
       controls: [
@@ -106,6 +108,16 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     ));
   }
 
+  Future<void> _playFromQueueIndex(int index) async {
+    if (index < 0 || index >= _queue.length) return;
+    _currentIndex = index;
+    final item = _queue[_currentIndex];
+    mediaItem.add(item);
+    await _player.setUrl(item.id);
+    await _player.play();
+    _broadcastState();
+  }
+
   @override
   Future<void> play() => _player.play();
   
@@ -116,27 +128,68 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> seek(Duration position) => _player.seek(position);
 
   @override
-  Future<void> skipToNext() => _player.seekToNext();
+  Future<void> skipToNext() async {
+    if (_currentIndex + 1 < _queue.length) {
+      await _playFromQueueIndex(_currentIndex + 1);
+    }
+  }
 
   @override
-  Future<void> skipToPrevious() => _player.seekToPrevious();
+  Future<void> skipToPrevious() async {
+    if (_currentIndex - 1 >= 0 && _queue.isNotEmpty) {
+      await _playFromQueueIndex(_currentIndex - 1);
+    }
+  }
 
   @override
   Future<void> stop() async {
     await _player.stop();
     await _player.seek(Duration.zero);
+    _currentIndex = -1;
+    _queue.clear();
+    queue.add(const []);
+    mediaItem.add(null);
+    _broadcastState();
   }
 
   @override
   Future<void> playMediaItem(MediaItem mediaItem) async {
-    this.mediaItem.add(mediaItem);
-    await _player.setUrl(mediaItem.id);
-    await _player.play();
+    _queue
+      ..clear()
+      ..add(mediaItem);
+    queue.add(List.unmodifiable(_queue));
+    await _playFromQueueIndex(0);
+  }
+
+  @override
+  Future<void> addQueueItem(MediaItem mediaItem) async {
+    _queue.add(mediaItem);
+    queue.add(List.unmodifiable(_queue));
+    if (_currentIndex == -1 && _queue.isNotEmpty) {
+      await _playFromQueueIndex(0);
+    } else {
+      _broadcastState();
+    }
+  }
+
+  @override
+  Future<void> addQueueItems(List<MediaItem> mediaItems) async {
+    _queue.addAll(mediaItems);
+    queue.add(List.unmodifiable(_queue));
+    if (_currentIndex == -1 && _queue.isNotEmpty) {
+      await _playFromQueueIndex(0);
+    } else {
+      _broadcastState();
+    }
+  }
+
+  @override
+  Future<void> skipToQueueItem(int index) async {
+    await _playFromQueueIndex(index);
   }
 
   @override
   Future<void> onTaskRemoved() async {
-
     await stop();
     await super.onTaskRemoved();
   }
