@@ -165,15 +165,7 @@ class Player extends StatelessWidget {
                         
                         // Progress Bar
                         StreamBuilder<Duration>(
-                          stream: Stream.periodic(const Duration(milliseconds: 100)).map((_) {
-                            final state = audioHandler.playbackState.value;
-                            final playing = state.playing;
-                            final position = state.updatePosition;
-                            if (playing) {
-                              return position + (DateTime.now().difference(state.updateTime)) * state.speed;
-                            }
-                            return position;
-                          }),
+                          stream: AudioService.position,
                           builder: (context, snapshot) {
                             final position = snapshot.data ?? Duration.zero;
                             final duration = mediaItem.duration ?? Duration.zero;
