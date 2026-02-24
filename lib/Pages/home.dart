@@ -455,6 +455,7 @@ class _NowPlayingBar extends StatelessWidget {
                           height: 48,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
+                            debugPrint(stackTrace.toString());
                             return Container(
                               width: 48,
                               height: 48,
