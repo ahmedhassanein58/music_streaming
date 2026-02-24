@@ -7,6 +7,10 @@ import 'package:http/http.dart' as http;
 import 'package:music_client/audio_service.dart';
 import 'package:audio_service/audio_service.dart';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:music_client/Pages/profile_drawer.dart';
+import 'package:music_client/core/providers/auth_provider.dart';
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.title});
   final String title;
@@ -27,17 +31,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _fetchRandomSongs() async {
-    // Reset state only on manual retry/refresh, but here we can just update
-    // If called from init, isLoading is already true.
-    // If called from retry, we might want to set loading.
+    final letters = 'abcdefghiklmnopqrstuvwxyz';
+    final currentChoice = letters[Random().nextInt(letters.length)];
     
+    print('Fetching songs for: $currentChoice');
     try {
-      final letters = 'abcdefghiklmnopqrstuvwxyz';
-      final currentChoice = letters[Random().nextInt(letters.length)];
-
       final url = Uri.parse('https://api.deezer.com/search?q=$currentChoice');
-      final res = await http.get(url).timeout(const Duration(seconds: 10));
+      final res = await http.get(url).timeout(const Duration(seconds: 30));
 
+      print('Deezer API response: ${res.statusCode}');
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (mounted) {
@@ -48,9 +50,11 @@ class _HomePageState extends State<HomePage> {
           });
         }
       } else {
+        print('Deezer API error: ${res.body}');
         _handleError();
       }
     } catch (e) {
+      print('Song fetching exception: $e');
       _handleError();
     }
   }
@@ -183,7 +187,11 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
+        actions: [
+          _ProfileIcon(),
+        ],
       ),
+      drawer: const ProfileDrawer(),
       body: Column(
         children: [
           Expanded(child: _buildBody()),
@@ -585,6 +593,33 @@ class MainBottomNavigationBar extends StatelessWidget {
           label: 'Create',
         ),
       ],
+    );
+  }
+}
+
+class _ProfileIcon extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+    final isAuthenticated = authState.status == AuthStatus.authenticated;
+
+    return IconButton(
+      icon: CircleAvatar(
+        radius: 14,
+        backgroundColor: isAuthenticated
+            ? Theme.of(context).colorScheme.primary.withOpacity(0.2)
+            : Colors.white10,
+        child: Icon(
+          isAuthenticated ? Icons.person : Icons.person_outline,
+          size: 18,
+          color: isAuthenticated
+              ? Theme.of(context).colorScheme.primary
+              : Colors.white70,
+        ),
+      ),
+      onPressed: () {
+        Scaffold.of(context).openDrawer();
+      },
     );
   }
 }

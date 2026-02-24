@@ -3,30 +3,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/providers/auth_provider.dart';
 
-class SignupPage extends ConsumerStatefulWidget {
-  const SignupPage({super.key});
+class LoginPage extends ConsumerStatefulWidget {
+  const LoginPage({super.key});
 
   @override
-  ConsumerState<SignupPage> createState() => _SignupPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _SignupPageState extends ConsumerState<SignupPage> {
-  final _usernameController = TextEditingController();
+class _LoginPageState extends ConsumerState<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  Future<void> _signup() async {
+  Future<void> _login() async {
     setState(() => _isLoading = true);
     try {
-      await ref.read(authProvider.notifier).signup(
-            _usernameController.text.trim(),
+      await ref.read(authProvider.notifier).login(
             _emailController.text.trim(),
             _passwordController.text.trim(),
           );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account created successfully!')),
+          const SnackBar(content: Text('Logged in successfully!')),
         );
         context.go('/');
       }
@@ -44,15 +42,11 @@ class _SignupPageState extends ConsumerState<SignupPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign Up')),
+      appBar: AppBar(title: const Text('Login')),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
-            TextField(
-              controller: _usernameController,
-              decoration: const InputDecoration(labelText: 'Username'),
-            ),
             TextField(
               controller: _emailController,
               decoration: const InputDecoration(labelText: 'Email'),
@@ -67,12 +61,12 @@ class _SignupPageState extends ConsumerState<SignupPage> {
               const CircularProgressIndicator()
             else
               ElevatedButton(
-                onPressed: _signup,
-                child: const Text('Sign Up'),
+                onPressed: _login,
+                child: const Text('Login'),
               ),
             TextButton(
-              onPressed: () => context.push('/login'),
-              child: const Text('Already have an account? Login'),
+              onPressed: () => context.push('/signup'),
+              child: const Text('Don\'t have an account? Sign Up'),
             ),
           ],
         ),

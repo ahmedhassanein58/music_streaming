@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:music_client/Pages/home.dart';
 import 'package:music_client/Pages/player.dart';
 import 'package:music_client/Pages/search/search_page.dart';
 import 'package:music_client/Pages/library/library_page.dart';
+import 'package:music_client/Pages/login_page.dart';
+import 'package:music_client/Pages/signup.dart';
+import 'package:music_client/Pages/profile_page.dart';
 import 'package:music_client/audio_service.dart';
 
 final GoRouter _router = GoRouter(
@@ -24,6 +28,18 @@ final GoRouter _router = GoRouter(
       path: '/library',
       builder: (context, state) => const LibraryPage(),
     ),
+    GoRoute(
+      path: '/login',
+      builder: (context, state) => const LoginPage(),
+    ),
+    GoRoute(
+      path: '/signup',
+      builder: (context, state) => const SignupPage(),
+    ),
+    GoRoute(
+      path: '/profile',
+      builder: (context, state) => const ProfilePage(),
+    ),
   ],
 );
 
@@ -32,7 +48,11 @@ void main() async {
 
   await AppAudioHandler.init();
 
-  runApp(const MyApp());
+  runApp(
+    const ProviderScope(
+      child: MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
