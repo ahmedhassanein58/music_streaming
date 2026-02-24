@@ -103,9 +103,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 }
 
-final authServiceProvider = Provider((ref) => AuthService());
-final userRepositoryProvider = Provider((ref) => UserRepository());
-final tokenStorageProvider = Provider((ref) => TokenStorage());
+final authServiceProvider = StateProvider<AuthService>((ref) => AuthService());
+final userRepositoryProvider = StateProvider<UserRepository>((ref) => UserRepository());
+final tokenStorageProvider = StateProvider<TokenStorage>((ref) => TokenStorage());
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier(

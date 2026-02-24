@@ -27,9 +27,15 @@ class UserRepository {
   }
 
   String _handleError(DioException e) {
-    if (e.response != null) {
-      return e.response?.data["message"] ?? "An error occurred";
+    if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.receiveTimeout) {
+      return "Connection timed out. Check your server.";
     }
-    return "Network error";
+    if (e.type == DioExceptionType.connectionError) {
+      return "Cannot connect to server at ${DioClient.baseUrl}. Is the backend running?";
+    }
+    if (e.response != null) {
+      return e.response?.data["message"] ?? "Server error: ${e.response?.statusCode}";
+    }
+    return "Network error: ${e.message}";
   }
 }

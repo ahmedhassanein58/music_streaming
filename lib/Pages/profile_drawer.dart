@@ -15,7 +15,7 @@ class ProfileDrawer extends ConsumerWidget {
       backgroundColor: const Color(0xFF0C1020),
       child: Column(
         children: [
-          _buildHeader(context, authState),
+          _buildHeader(context, authState,ref),
           const Divider(color: Colors.white10),
           Expanded(
             child: ListView(
@@ -69,13 +69,12 @@ class ProfileDrawer extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, AuthState authState) {
+  Widget _buildHeader(BuildContext context, AuthState authState, WidgetRef ref) {
     final user = authState.user;
     final bool isAuthenticated = authState.status == AuthStatus.authenticated;
     final bool isLoading = authState.status == AuthStatus.loading;
 
     print('Drawer buildHeader: status=${authState.status}, user=${user?.username}');
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.only(top: 60, bottom: 20, left: 20, right: 20),
@@ -120,6 +119,31 @@ class ProfileDrawer extends ConsumerWidget {
                 fontSize: 14,
                 color: Colors.grey[400],
               ),
+            ),
+          ] else if (authState.status == AuthStatus.error) ...[
+            Text(
+              'Auth Error',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.redAccent,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              authState.errorMessage ?? 'Check connection',
+              style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: () => ref.read(authProvider.notifier).checkAuthStatus(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white10,
+                minimumSize: const Size(100, 32),
+              ),
+              child: const Text('Retry', style: TextStyle(fontSize: 12)),
             ),
           ] else ...[
             const Text(
