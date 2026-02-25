@@ -1,0 +1,22 @@
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+
+namespace Echonova.Api.Models;
+
+public class History
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.String)]
+    public Guid Id { get; set; }
+
+    [BsonRepresentation(BsonType.String)]
+    [BsonElement("user_id")]
+    public Guid UserId { get; set; }
+    [BsonRepresentation(BsonType.String)]
+    [BsonElement("track_id")]
+    public Guid TrackId { get; set; }
+    [BsonElement("play_count")]
+    public int PlayCount { get; set; }
+    [BsonElement("last_played")]
+    public DateTime LastPlayed { get; set; }
+}
