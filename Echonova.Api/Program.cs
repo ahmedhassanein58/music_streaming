@@ -1,8 +1,58 @@
 using System.Text;
+using Echonova.Api.Models;
 using Echonova.Api.Options;
+using Echonova.Api.Serialization;
 using Echonova.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using MongoDB.Bson.Serialization;
+
+// Allow Song Id and TrackId to deserialize from MongoDB ObjectId (existing Atlas data)
+BsonClassMap.RegisterClassMap<Song>(cm =>
+{
+    cm.AutoMap();
+    cm.SetIgnoreExtraElements(true);
+    cm.MapIdMember(s => s.Id).SetSerializer(new GuidAcceptingObjectIdSerializer());
+    cm.MapMember(s => s.TrackId).SetSerializer(new GuidAcceptingObjectIdSerializer());
+});
+
+// Ignore extra elements in embedded docs (e.g. s3_url stored inside audio_feature in some documents)
+BsonClassMap.RegisterClassMap<AudioFeature>(cm =>
+{
+    cm.AutoMap();
+    cm.SetIgnoreExtraElements(true);
+});
+
+// Allow User, Admin, Playlist, History, AnonymousSession _id (and some Guid fields) from ObjectId
+var guidSerializer = new GuidAcceptingObjectIdSerializer();
+BsonClassMap.RegisterClassMap<User>(cm =>
+{
+    cm.AutoMap();
+    cm.MapIdMember(u => u.Id).SetSerializer(guidSerializer);
+});
+BsonClassMap.RegisterClassMap<Admin>(cm =>
+{
+    cm.AutoMap();
+    cm.MapIdMember(a => a.Id).SetSerializer(guidSerializer);
+});
+BsonClassMap.RegisterClassMap<Playlist>(cm =>
+{
+    cm.AutoMap();
+    cm.MapIdMember(p => p.Id).SetSerializer(guidSerializer);
+    cm.MapMember(p => p.UserId).SetSerializer(guidSerializer);
+});
+BsonClassMap.RegisterClassMap<History>(cm =>
+{
+    cm.AutoMap();
+    cm.MapIdMember(h => h.Id).SetSerializer(guidSerializer);
+    cm.MapMember(h => h.UserId).SetSerializer(guidSerializer);
+    cm.MapMember(h => h.TrackId).SetSerializer(guidSerializer);
+});
+BsonClassMap.RegisterClassMap<AnonymousSession>(cm =>
+{
+    cm.AutoMap();
+    cm.MapIdMember(s => s.Id).SetSerializer(guidSerializer);
+});
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,7 +96,28 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim("isAdmin", "true"));
 });
 
-builder.Services.AddControllers();
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.SetIsOriginAllowed(origin =>
+        {
+            if (string.IsNullOrEmpty(origin)) return false;
+            var uri = new Uri(origin);
+            return (uri.Host == "localhost" || uri.Host == "127.0.0.1" || uri.Host == "10.0.2.2")
+                && (uri.Scheme == "http" || uri.Scheme == "https");
+        });
+        policy.AllowAnyMethod();
+        policy.AllowAnyHeader();
+        policy.AllowCredentials();
+    });
+});
+
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -67,10 +138,30 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler(errorApp =>
+    {
+        errorApp.Run(async context =>
+        {
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+            var ex = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+            var msg = ex?.Message ?? "Unknown error";
+            var detail = ex?.ToString() ?? "";
+            await context.Response.WriteAsJsonAsync(new { message = msg, detail });
+        });
+    });
+}
+
 app.UseSwagger();
 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Echonova API v1"));
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

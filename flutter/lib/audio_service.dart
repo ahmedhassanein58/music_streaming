@@ -113,10 +113,16 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _currentIndex = index;
     final item = _queue[_currentIndex];
     mediaItem.add(item);
+    await _player.stop();
     await _player.setUrl(item.id);
     await _player.play();
     _broadcastState();
   }
+
+  /// Stream of current track duration (for progress bar when MediaItem.duration is null).
+  Stream<Duration?> get durationStream => _player.durationStream;
+  /// Current position (for progress bar).
+  Stream<Duration> get positionStream => _player.positionStream;
 
   @override
   Future<void> play() => _player.play();

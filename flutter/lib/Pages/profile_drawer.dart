@@ -74,7 +74,6 @@ class ProfileDrawer extends ConsumerWidget {
     final bool isAuthenticated = authState.status == AuthStatus.authenticated;
     final bool isLoading = authState.status == AuthStatus.loading;
 
-    print('Drawer buildHeader: status=${authState.status}, user=${user?.username}');
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.only(top: 60, bottom: 20, left: 20, right: 20),

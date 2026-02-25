@@ -1,70 +1,88 @@
-import 'dart:convert';
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'package:music_client/audio_service.dart';
 import 'package:audio_service/audio_service.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:music_client/core/models/song_model.dart';
+import 'package:music_client/core/models/playlist_model.dart';
+import 'package:music_client/core/network/playlist_repository.dart';
+import 'package:music_client/core/network/song_repository.dart';
+import 'package:music_client/core/network/history_repository.dart';
 import 'package:music_client/Pages/profile_drawer.dart';
 import 'package:music_client/core/providers/auth_provider.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key, required this.title});
   final String title;
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends ConsumerState<HomePage> {
   bool isLoading = true;
   bool isError = false;
-  List<dynamic> songs = [];
+  String? errorMessage;
+  List<Song> suggested = [];
+  Map<String, List<Song>> genreSections = {};
+  List<Song> allSongs = [];
+  final SongRepository _songRepo = SongRepository();
+  final HistoryRepository _historyRepo = HistoryRepository();
+  final PlaylistRepository _playlistRepo = PlaylistRepository();
 
   @override
   void initState() {
     super.initState();
-    _fetchRandomSongs();
+    _fetchSongs();
   }
 
-  Future<void> _fetchRandomSongs() async {
-    final letters = 'abcdefghiklmnopqrstuvwxyz';
-    final currentChoice = letters[Random().nextInt(letters.length)];
-    
-    print('Fetching songs for: $currentChoice');
+  Future<void> _fetchSongs() async {
     try {
-      final url = Uri.parse('https://api.deezer.com/search?q=$currentChoice');
-      final res = await http.get(url).timeout(const Duration(seconds: 30));
-
-      print('Deezer API response: ${res.statusCode}');
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (mounted) {
-          setState(() {
-            songs = (data['data'] as List?)?.take(20).toList() ?? [];
-            isLoading = false;
-            isError = false;
-          });
+      final result = await _songRepo.list(page: 0, pageSize: 60);
+      final items = result.items;
+      if (items.isEmpty && mounted) {
+        setState(() {
+          suggested = [];
+          genreSections = {};
+          allSongs = [];
+          isLoading = false;
+          isError = false;
+          errorMessage = null;
+        });
+        return;
+      }
+      final genres = <String>{};
+      for (final s in items) {
+        for (final g in s.genre) {
+          if (g.isNotEmpty) genres.add(g);
         }
-      } else {
-        print('Deezer API error: ${res.body}');
-        _handleError();
+      }
+      suggested = items.length >= 10 ? items.sublist(0, 10) : items;
+      allSongs = items;
+      final sectionMap = <String, List<Song>>{};
+      final genreList = genres.toList()..sort();
+      for (final g in genreList.take(2)) {
+        try {
+          final res = await _songRepo.list(genre: g, page: 0, pageSize: 10);
+          if (res.items.isNotEmpty) sectionMap[g] = res.items;
+        } catch (_) {}
+      }
+      if (mounted) {
+        setState(() {
+          genreSections = sectionMap;
+          isLoading = false;
+          isError = false;
+          errorMessage = null;
+        });
       }
     } catch (e) {
-      print('Song fetching exception: $e');
-      _handleError();
-    }
-  }
-
-  void _handleError() {
-    if (mounted) {
-      setState(() {
-        isError = true;
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          isError = true;
+          isLoading = false;
+          errorMessage = e.toString();
+        });
+      }
     }
   }
 
@@ -72,20 +90,30 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       isLoading = true;
       isError = false;
+      errorMessage = null;
     });
-    _fetchRandomSongs();
+    _fetchSongs();
   }
 
-  Future<void> _playSong(Map<String, dynamic> song) async {
-    final previewUrl = song['preview'];
-    
-    if (previewUrl == null || previewUrl.toString().isEmpty) {
+  Future<void> _recordPlayIfAuthenticated(String trackId) async {
+    final authState = ref.read(authProvider);
+    if (authState.status != AuthStatus.authenticated) return;
+    try {
+      await _historyRepo.recordPlay(trackId);
+    } catch (_) {
+      // Best-effort; do not block playback
+    }
+  }
+
+  Future<void> _playSong(Song song) async {
+    final playUrl = song.s3Url;
+    if (playUrl.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Preview not available for this song'),
+          const SnackBar(
+            content: Text('Play URL not available for this song'),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
           ),
         );
       }
@@ -95,15 +123,12 @@ class _HomePageState extends State<HomePage> {
     try {
       final handler = AppAudioHandler.instance;
       final mediaItem = MediaItem(
-        id: previewUrl,
-        title: song['title'] ?? 'Unknown Title',
-        artist: song['artist']?['name'] ?? 'Unknown Artist',
-        album: song['album']?['title'] ?? 'Unknown Album',
-        artUri: Uri.parse(song['album']?['cover_medium'] ?? ''),
-        duration: Duration(seconds: song['duration'] ?? 30),
+        id: playUrl,
+        title: song.title,
+        artist: song.artist,
+        album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
       );
 
-      // Start playback without blocking navigation to the player.
       handler.playMediaItem(mediaItem).catchError((e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -115,9 +140,7 @@ class _HomePageState extends State<HomePage> {
         );
       });
 
-      if (mounted) {
-        context.push('/player');
-      }
+      await _recordPlayIfAuthenticated(song.trackId);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -131,16 +154,15 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _addToQueue(Map<String, dynamic> song) async {
-    final previewUrl = song['preview'];
-
-    if (previewUrl == null || previewUrl.toString().isEmpty) {
+  Future<void> _addToQueue(Song song) async {
+    final playUrl = song.s3Url;
+    if (playUrl.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Preview not available for this song'),
+          const SnackBar(
+            content: Text('Play URL not available for this song'),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
           ),
         );
       }
@@ -150,16 +172,12 @@ class _HomePageState extends State<HomePage> {
     try {
       final handler = AppAudioHandler.instance;
       final mediaItem = MediaItem(
-        id: previewUrl,
-        title: song['title'] ?? 'Unknown Title',
-        artist: song['artist']?['name'] ?? 'Unknown Artist',
-        album: song['album']?['title'] ?? 'Unknown Album',
-        artUri: Uri.parse(song['album']?['cover_medium'] ?? ''),
-        duration: Duration(seconds: song['duration'] ?? 30),
+        id: playUrl,
+        title: song.title,
+        artist: song.artist,
+        album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
       );
-
       await handler.addQueueItem(mediaItem);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -207,26 +225,159 @@ class _HomePageState extends State<HomePage> {
       return const LoadingView();
     }
     if (isError) {
-      return ErrorView(onRetry: _retry);
+      return ErrorView(message: errorMessage, onRetry: _retry);
     }
-    if (songs.isEmpty) {
+    if (suggested.isEmpty && genreSections.isEmpty && allSongs.isEmpty) {
       return EmptyView(onRefresh: _retry);
     }
+    final audioHandler = AppAudioHandler.instance;
     return RefreshIndicator(
-      onRefresh: _fetchRandomSongs,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: songs.length,
-        itemBuilder: (context, index) {
-          final song = songs[index];
-          return SongTile(
-            song: song,
-            onTap: () => _playSong(song),
-            onAddToQueue: () => _addToQueue(song),
+      onRefresh: _fetchSongs,
+      child: StreamBuilder<MediaItem?>(
+        stream: audioHandler.mediaItem,
+        builder: (context, mediaSnapshot) {
+          final currentMediaId = mediaSnapshot.data?.id;
+          return StreamBuilder<PlaybackState>(
+            stream: audioHandler.playbackState,
+            builder: (context, stateSnapshot) {
+              final isPlaying = stateSnapshot.data?.playing ?? false;
+              final sections = <Widget>[];
+              if (suggested.isNotEmpty) {
+                sections.add(_SectionTitle('Suggested for you'));
+                sections.add(_HorizontalSongStrip(
+                  songs: suggested,
+                  currentMediaId: currentMediaId,
+                  isPlaying: isPlaying,
+                  onPlay: _playSong,
+                  onAddToQueue: _addToQueue,
+                  onAddToPlaylist: onAddToPlaylist,
+                ));
+              }
+              for (final e in genreSections.entries) {
+                if (e.value.isEmpty) continue;
+                sections.add(_GenreSectionWithImage(
+                  genre: e.key,
+                  songs: e.value,
+                  currentMediaId: currentMediaId,
+                  isPlaying: isPlaying,
+                  onPlay: _playSong,
+                  onAddToQueue: _addToQueue,
+                  onAddToPlaylist: onAddToPlaylist,
+                ));
+              }
+              if (allSongs.isNotEmpty) {
+                sections.add(_SectionTitle('All songs'));
+                sections.add(_VerticalSongList(
+                  songs: allSongs,
+                  currentMediaId: currentMediaId,
+                  isPlaying: isPlaying,
+                  audioHandler: audioHandler,
+                  onPlay: _playSong,
+                  onAddToQueue: _addToQueue,
+                  onAddToPlaylist: onAddToPlaylist,
+                ));
+              }
+              return ListView(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                children: sections,
+              );
+            },
           );
         },
       ),
     );
+  }
+
+  void Function(Song)? get onAddToPlaylist => _showAddToPlaylistDialog;
+
+  Future<void> _showAddToPlaylistDialog(Song song) async {
+    final authState = ref.read(authProvider);
+    if (authState.status != AuthStatus.authenticated) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sign in to add to playlist'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+    List<Playlist> playlists;
+    try {
+      playlists = await _playlistRepo.list();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not load playlists: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    if (playlists.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Create a playlist first in Library'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final chosen = await showModalBottomSheet<Playlist>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Add "${song.title}" to playlist',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            ...playlists.map(
+              (p) => ListTile(
+                leading: const Icon(Icons.playlist_play),
+                title: Text(p.name),
+                subtitle: Text('${p.tracksId.length} tracks'),
+                onTap: () => Navigator.pop(ctx, p),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (chosen != null && mounted) {
+      try {
+        await _playlistRepo.addTracks(chosen.id, [song.trackId]);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Added to ${chosen.name}'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed: $e'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
   }
 }
 
@@ -259,9 +410,10 @@ class LoadingView extends StatelessWidget {
 }
 
 class ErrorView extends StatelessWidget {
+  final String? message;
   final VoidCallback onRetry;
 
-  const ErrorView({super.key, required this.onRetry});
+  const ErrorView({super.key, this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -279,6 +431,19 @@ class ErrorView extends StatelessWidget {
               fontWeight: FontWeight.w500,
             ),
           ),
+          if (message != null && message!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                message!,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: onRetry,
@@ -324,16 +489,301 @@ class EmptyView extends StatelessWidget {
   }
 }
 
-class SongTile extends StatelessWidget {
-  final Map<String, dynamic> song;
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  const _SectionTitle(this.title);
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+/// Genre section with a photo card and horizontal song strip.
+class _GenreSectionWithImage extends StatelessWidget {
+  final String genre;
+  final List<Song> songs;
+  final String? currentMediaId;
+  final bool isPlaying;
+  final void Function(Song) onPlay;
+  final void Function(Song) onAddToQueue;
+  final void Function(Song)? onAddToPlaylist;
+
+  const _GenreSectionWithImage({
+    required this.genre,
+    required this.songs,
+    required this.currentMediaId,
+    required this.isPlaying,
+    required this.onPlay,
+    required this.onAddToQueue,
+    this.onAddToPlaylist,
+  });
+
+  static String _imageUrlForGenre(String name) {
+    final seed = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return 'https://picsum.photos/seed/${seed.isEmpty ? "genre" : seed}/400/200';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 100,
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    _imageUrlForGenre(genre),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.grey[800],
+                      child: const Icon(Icons.music_note, size: 48, color: Colors.grey),
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        genre,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        _HorizontalSongStrip(
+          songs: songs,
+          currentMediaId: currentMediaId,
+          isPlaying: isPlaying,
+          onPlay: onPlay,
+          onAddToQueue: onAddToQueue,
+          onAddToPlaylist: onAddToPlaylist,
+        ),
+      ],
+    );
+  }
+}
+
+class _HorizontalSongStrip extends StatelessWidget {
+  final List<Song> songs;
+  final String? currentMediaId;
+  final bool isPlaying;
+  final void Function(Song) onPlay;
+  final void Function(Song) onAddToQueue;
+  final void Function(Song)? onAddToPlaylist;
+
+  const _HorizontalSongStrip({
+    required this.songs,
+    required this.currentMediaId,
+    required this.isPlaying,
+    required this.onPlay,
+    required this.onAddToQueue,
+    this.onAddToPlaylist,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 160,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: songs.length,
+        itemBuilder: (context, index) {
+          final song = songs[index];
+          final isCurrentlyPlaying = currentMediaId != null && currentMediaId == song.s3Url;
+          return _CompactSongCard(
+            song: song,
+            isCurrentlyPlaying: isCurrentlyPlaying,
+            isPlaying: isCurrentlyPlaying && isPlaying,
+            onTap: () => onPlay(song),
+            onAddToQueue: () => onAddToQueue(song),
+            onAddToPlaylist: onAddToPlaylist != null ? () => onAddToPlaylist!(song) : null,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _VerticalSongList extends StatelessWidget {
+  final List<Song> songs;
+  final String? currentMediaId;
+  final bool isPlaying;
+  final AppAudioHandler audioHandler;
+  final void Function(Song) onPlay;
+  final void Function(Song) onAddToQueue;
+  final void Function(Song)? onAddToPlaylist;
+
+  const _VerticalSongList({
+    required this.songs,
+    required this.currentMediaId,
+    required this.isPlaying,
+    required this.audioHandler,
+    required this.onPlay,
+    required this.onAddToQueue,
+    this.onAddToPlaylist,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: songs.length,
+      itemBuilder: (context, index) {
+        final song = songs[index];
+        final isCurrentlyPlaying = currentMediaId != null && currentMediaId == song.s3Url;
+        return SongTile(
+          song: song,
+          isCurrentlyPlaying: isCurrentlyPlaying,
+          isPlaying: isCurrentlyPlaying && isPlaying,
+          onTap: () {
+            if (isCurrentlyPlaying) {
+              if (isPlaying) {
+                audioHandler.pause();
+              } else {
+                audioHandler.play();
+              }
+            } else {
+              onPlay(song);
+            }
+          },
+          onAddToQueue: () => onAddToQueue(song),
+          onAddToPlaylist: onAddToPlaylist,
+        );
+      },
+    );
+  }
+}
+
+class _CompactSongCard extends StatelessWidget {
+  final Song song;
+  final bool isCurrentlyPlaying;
+  final bool isPlaying;
   final VoidCallback onTap;
   final VoidCallback onAddToQueue;
+  final VoidCallback? onAddToPlaylist;
+
+  const _CompactSongCard({
+    required this.song,
+    required this.isCurrentlyPlaying,
+    required this.isPlaying,
+    required this.onTap,
+    required this.onAddToQueue,
+    this.onAddToPlaylist,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 130,
+            height: 160,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 130,
+                  height: 118,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: isCurrentlyPlaying
+                        ? Theme.of(context).colorScheme.primary.withOpacity(0.3)
+                        : Colors.grey[800],
+                  ),
+                  child: Icon(
+                    isCurrentlyPlaying ? Icons.graphic_eq : Icons.music_note,
+                    size: 40,
+                    color: isCurrentlyPlaying
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  song.title.isNotEmpty ? song.title : 'Unknown',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  song.artist.isNotEmpty ? song.artist : 'Unknown artist',
+                  style: TextStyle(color: Colors.grey[400], fontSize: 11),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SongTile extends StatelessWidget {
+  final Song song;
+  final bool isCurrentlyPlaying;
+  final bool isPlaying;
+  final VoidCallback onTap;
+  final VoidCallback onAddToQueue;
+  final void Function(Song)? onAddToPlaylist;
 
   const SongTile({
     super.key,
     required this.song,
+    this.isCurrentlyPlaying = false,
+    this.isPlaying = false,
     required this.onTap,
     required this.onAddToQueue,
+    this.onAddToPlaylist,
   });
 
   @override
@@ -341,51 +791,56 @@ class SongTile extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       elevation: 0,
-      color: Colors.white.withOpacity(0.03),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: isCurrentlyPlaying
+          ? Theme.of(context).colorScheme.primary.withOpacity(0.12)
+          : Colors.white.withOpacity(0.03),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: isCurrentlyPlaying
+            ? BorderSide(color: Theme.of(context).colorScheme.primary.withOpacity(0.5), width: 1)
+            : BorderSide.none,
+      ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(
-            song['album']?['cover_small'] ?? '',
-            width: 56,
-            height: 56,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                width: 56,
-                height: 56,
-                color: Colors.grey[300],
-                child: const Icon(Icons.music_note),
-              );
-            },
+        leading: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: isCurrentlyPlaying ? Theme.of(context).colorScheme.primary.withOpacity(0.3) : Colors.grey[800],
           ),
+          child: isCurrentlyPlaying
+              ? Icon(Icons.graphic_eq, color: Theme.of(context).colorScheme.primary, size: 28)
+              : const Icon(Icons.music_note, color: Colors.grey, size: 28),
         ),
         title: Text(
-          song['title'] ?? 'Unknown Title',
-          style: const TextStyle(
+          song.title.isNotEmpty ? song.title : 'Unknown Title',
+          style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 16,
-            color: Colors.white,
+            color: isCurrentlyPlaying ? Theme.of(context).colorScheme.primary : Colors.white,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          song['artist']?['name'] ?? 'Unknown Artist',
+          isCurrentlyPlaying
+              ? (isPlaying ? 'Now playing' : 'Paused')
+              : (song.artist.isNotEmpty ? song.artist : 'Unknown Artist'),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 13,
-            color: Colors.grey[400],
+            color: isCurrentlyPlaying ? Theme.of(context).colorScheme.primary.withOpacity(0.9) : Colors.grey[400],
           ),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: const Icon(Icons.play_circle_fill),
+              icon: Icon(
+                (isCurrentlyPlaying && isPlaying) ? Icons.pause_circle_filled : Icons.play_circle_fill,
+              ),
               color: Theme.of(context).colorScheme.primary,
               onPressed: onTap,
             ),
@@ -397,6 +852,8 @@ class SongTile extends StatelessWidget {
               onSelected: (value) {
                 if (value == 'add_to_queue') {
                   onAddToQueue();
+                } else if (value == 'add_to_playlist' && onAddToPlaylist != null) {
+                  onAddToPlaylist!(song);
                 }
               },
               itemBuilder: (context) => [
@@ -404,6 +861,11 @@ class SongTile extends StatelessWidget {
                   value: 'add_to_queue',
                   child: Text('Add to queue'),
                 ),
+                if (onAddToPlaylist != null)
+                  const PopupMenuItem<String>(
+                    value: 'add_to_playlist',
+                    child: Text('Add to playlist'),
+                  ),
               ],
             ),
           ],
@@ -452,21 +914,21 @@ class _NowPlayingBar extends StatelessWidget {
                 },
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Row(
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
                           mediaItem.artUri?.toString() ?? '',
-                          width: 48,
-                          height: 48,
+                          width: 44,
+                          height: 44,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
                             debugPrint(stackTrace.toString());
                             return Container(
-                              width: 48,
-                              height: 48,
+                              width: 44,
+                              height: 44,
                               color: Colors.grey[300],
                               child: const Icon(Icons.music_note),
                             );
@@ -575,20 +1037,20 @@ class MainBottomNavigationBar extends StatelessWidget {
             break;
         }
       },
-      items: const [
-        BottomNavigationBarItem(
+      items: [
+        const BottomNavigationBarItem(
           icon: Icon(Icons.home_outlined),
           label: 'Home',
         ),
-        BottomNavigationBarItem(
+        const BottomNavigationBarItem(
           icon: Icon(Icons.search),
           label: 'Search',
         ),
-        BottomNavigationBarItem(
+        const BottomNavigationBarItem(
           icon: Icon(Icons.library_music_outlined),
           label: 'Library',
         ),
-        BottomNavigationBarItem(
+        const BottomNavigationBarItem(
           icon: Icon(Icons.add),
           label: 'Create',
         ),

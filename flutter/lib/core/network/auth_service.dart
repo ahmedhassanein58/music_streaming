@@ -47,7 +47,7 @@ class AuthService {
       return "Cannot connect to server at ${DioClient.baseUrl}. Is the backend running?";
     }
     if (e.response != null) {
-      return e.response?.data["message"] ?? "Server error: ${e.response?.statusCode}";
+      return e.response?.data?['message']?.toString() ?? "Server error: ${e.response?.statusCode}";
     }
     return "Network error: ${e.message}";
   }

@@ -1,10 +1,12 @@
 class User {
+  final String id;
   final String username;
   final String email;
   final List<String> preferences;
   final bool receiveRecommendationEmails;
 
   User({
+    required this.id,
     required this.username,
     required this.email,
     required this.preferences,
@@ -13,6 +15,7 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
+      id: json["id"]?.toString() ?? "",
       username: json["username"] ?? "",
       email: json["email"] ?? "",
       preferences: (json["preference"] as List<dynamic>?)
@@ -25,6 +28,7 @@ class User {
 
   Map<String, dynamic> toJson() {
     return {
+      "id": id,
       "username": username,
       "email": email,
       "preference": preferences,
@@ -33,12 +37,14 @@ class User {
   }
 
   User copyWith({
+    String? id,
     String? username,
     String? email,
     List<String>? preferences,
     bool? receiveRecommendationEmails,
   }) {
     return User(
+      id: id ?? this.id,
       username: username ?? this.username,
       email: email ?? this.email,
       preferences: preferences ?? this.preferences,

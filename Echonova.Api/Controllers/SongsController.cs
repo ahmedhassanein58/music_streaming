@@ -34,4 +34,12 @@ public class SongsController : ControllerBase
         if (song == null) return NotFound();
         return Ok(song);
     }
+
+    [HttpPost("by-ids")]
+    public async Task<IActionResult> GetByTrackIds([FromBody] List<Guid> trackIds, CancellationToken ct = default)
+    {
+        if (trackIds == null || trackIds.Count == 0) return Ok(new List<object>());
+        var list = await _songs.GetByTrackIdsAsync(trackIds, ct);
+        return Ok(list);
+    }
 }

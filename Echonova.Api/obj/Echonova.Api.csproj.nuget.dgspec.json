@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "/home/abraam/Desktop/Business/GP/Echonova.Api/Echonova.Api.csproj": {}
+    "/home/abraam/Desktop/Business/GP/music_streaming/Echonova.Api/Echonova.Api.csproj": {}
   },
   "projects": {
-    "/home/abraam/Desktop/Business/GP/Echonova.Api/Echonova.Api.csproj": {
+    "/home/abraam/Desktop/Business/GP/music_streaming/Echonova.Api/Echonova.Api.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/home/abraam/Desktop/Business/GP/Echonova.Api/Echonova.Api.csproj",
+        "projectUniqueName": "/home/abraam/Desktop/Business/GP/music_streaming/Echonova.Api/Echonova.Api.csproj",
         "projectName": "Echonova.Api",
-        "projectPath": "/home/abraam/Desktop/Business/GP/Echonova.Api/Echonova.Api.csproj",
+        "projectPath": "/home/abraam/Desktop/Business/GP/music_streaming/Echonova.Api/Echonova.Api.csproj",
         "packagesPath": "/home/abraam/.nuget/packages/",
-        "outputPath": "/home/abraam/Desktop/Business/GP/Echonova.Api/obj/",
+        "outputPath": "/home/abraam/Desktop/Business/GP/music_streaming/Echonova.Api/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/abraam/.nuget/NuGet/NuGet.Config"

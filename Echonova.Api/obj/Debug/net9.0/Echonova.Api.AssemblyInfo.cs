@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Echonova.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+45400922ee886a7dc39ba63550b1b71d2c8ce0e2")]
 [assembly: System.Reflection.AssemblyProductAttribute("Echonova API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Echonova.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

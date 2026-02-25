@@ -19,4 +19,8 @@ public class History
     public int PlayCount { get; set; }
     [BsonElement("last_played")]
     public DateTime LastPlayed { get; set; }
+    [BsonElement("title")]
+    public string? Title { get; set; }
+    [BsonElement("artist")]
+    public string? Artist { get; set; }
 }

@@ -169,65 +169,72 @@ class Player extends StatelessWidget {
                         
                         const SizedBox(height: 40),
                         
-                        // Progress Bar
-                        StreamBuilder<Duration>(
-                          stream: AudioService.position,
-                          builder: (context, snapshot) {
-                            final position = snapshot.data ?? Duration.zero;
-                            final duration = mediaItem.duration ?? Duration.zero;
-                            
-                            // Clamp position to duration to prevent overflow visuals
-                            final clampedPosition = position > duration ? duration : position;
-                            
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                              child: Column(
-                                children: [
-                                  SliderTheme(
-                                    data: SliderTheme.of(context).copyWith(
-                                      trackHeight: 4,
-                                      thumbShape: const RoundSliderThumbShape(
-                                        enabledThumbRadius: 8,
-                                      ),
-                                      activeTrackColor: Theme.of(context).colorScheme.primary,
-                                      inactiveTrackColor: Colors.grey[700],
-                                      thumbColor: Theme.of(context).colorScheme.primary,
-                                    ),
-                                    child: Slider(
-                                      value: clampedPosition.inMilliseconds.toDouble().clamp(
-                                        0.0,
-                                        duration.inMilliseconds.toDouble(),
-                                      ),
-                                      max: duration.inMilliseconds.toDouble().clamp(1.0, double.infinity),
-                                      onChanged: (value) {
-                                        audioHandler.seek(Duration(milliseconds: value.toInt()));
-                                      },
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          _formatDuration(clampedPosition),
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey[400],
+                        // Progress Bar (position + duration from player so slider works for streams)
+                        StreamBuilder<Duration?>(
+                          stream: audioHandler.durationStream,
+                          builder: (context, durSnapshot) {
+                            final duration = durSnapshot.data ?? mediaItem.duration ?? Duration.zero;
+                            return StreamBuilder<Duration>(
+                              stream: audioHandler.positionStream,
+                              builder: (context, posSnapshot) {
+                                final position = posSnapshot.data ?? Duration.zero;
+                                final clampedPosition = duration.inMilliseconds > 0
+                                    ? (position > duration ? duration : position)
+                                    : position;
+
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                                  child: Column(
+                                    children: [
+                                      SliderTheme(
+                                        data: SliderTheme.of(context).copyWith(
+                                          trackHeight: 4,
+                                          thumbShape: const RoundSliderThumbShape(
+                                            enabledThumbRadius: 8,
                                           ),
+                                          activeTrackColor: Theme.of(context).colorScheme.primary,
+                                          inactiveTrackColor: Colors.grey[700],
+                                          thumbColor: Theme.of(context).colorScheme.primary,
                                         ),
-                                        Text(
-                                          _formatDuration(duration),
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey[400],
+                                        child: Slider(
+                                          value: clampedPosition.inMilliseconds.toDouble().clamp(
+                                            0.0,
+                                            (duration.inMilliseconds).toDouble().clamp(1.0, double.infinity),
                                           ),
+                                          max: (duration.inMilliseconds).toDouble().clamp(1.0, double.infinity),
+                                          onChanged: duration.inMilliseconds > 0
+                                              ? (value) {
+                                                  audioHandler.seek(Duration(milliseconds: value.toInt()));
+                                                }
+                                              : null,
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              _formatDuration(clampedPosition),
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey[400],
+                                              ),
+                                            ),
+                                            Text(
+                                              _formatDuration(duration),
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey[400],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
+                                );
+                              },
                             );
                           },
                         ),

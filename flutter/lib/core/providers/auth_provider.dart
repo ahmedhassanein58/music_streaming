@@ -44,15 +44,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final token = await _storage.getToken();
       if (token == null) {
         state = AuthState.guest();
-        print('Guest mode');
         return;
       }
 
       final user = await _userRepository.getCurrentUser();
-      print('Auth status check success. User: ${user.username}');
       state = AuthState.authenticated(user);
     } catch (e) {
-      print('Auth status check error: $e');
       state = AuthState.guest();
     }
   }
@@ -62,10 +59,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       await _authService.login(LoginRequest(email: email, password: password));
       final user = await _userRepository.getCurrentUser();
-      print('Login success. User: ${user.username}, ${user.email}');
       state = AuthState.authenticated(user);
     } catch (e) {
-      print('Login error: $e');
       state = AuthState.error(e.toString());
     }
   }
@@ -79,10 +74,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         password: password,
       ));
       final user = await _userRepository.getCurrentUser();
-      print('Signup success. User: ${user.username}, ${user.email}');
       state = AuthState.authenticated(user);
     } catch (e) {
-      print('Signup error: $e');
       state = AuthState.error(e.toString());
     }
   }

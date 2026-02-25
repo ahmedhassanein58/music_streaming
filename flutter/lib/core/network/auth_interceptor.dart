@@ -5,6 +5,9 @@ import '../storage/token_storage.dart';
 class AuthInterceptor extends Interceptor {
   final TokenStorage _storage = TokenStorage();
 
+  /// Set from main to redirect to login when the backend returns 401.
+  static void Function()? onUnauthorized;
+
   @override
   void onRequest(
       RequestOptions options,
@@ -23,9 +26,8 @@ class AuthInterceptor extends Interceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) async {
 
     if (err.response?.statusCode == 401) {
-      // Token expired or invalid
       await _storage.clear();
-      // TODO: navigate to login
+      onUnauthorized?.call();
     }
 
     return handler.next(err);

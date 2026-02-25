@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:music_client/core/network/auth_interceptor.dart';
 import 'package:music_client/Pages/home.dart';
 import 'package:music_client/Pages/player.dart';
 import 'package:music_client/Pages/search/search_page.dart';
@@ -47,6 +48,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await AppAudioHandler.init();
+
+  AuthInterceptor.onUnauthorized = () {
+    _router.go('/login');
+  };
 
   runApp(
     const ProviderScope(
