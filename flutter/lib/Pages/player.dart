@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:music_client/audio_service.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:music_client/core/models/playlist_model.dart';
+import 'package:music_client/core/network/playlist_repository.dart';
+import 'package:music_client/core/providers/auth_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
-class Player extends StatelessWidget {
+class Player extends ConsumerWidget {
   const Player({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final audioHandler = AppAudioHandler.instance;
     
     return Scaffold(
@@ -61,7 +66,7 @@ class Player extends StatelessWidget {
                         const Spacer(),
                         IconButton(
                           icon: const Icon(Icons.more_vert),
-                          onPressed: () {},
+                          onPressed: () => _showPlayerOptions(context, ref, mediaItem),
                         ),
                       ],
                     ),
@@ -290,6 +295,198 @@ class Player extends StatelessWidget {
     );
   }
   
+  static void _showPlayerOptions(BuildContext context, WidgetRef ref, MediaItem mediaItem) {
+    final trackId = mediaItem.extras?['trackId']?.toString();
+    final authState = ref.read(authProvider);
+    final isAuthenticated = authState.status == AuthStatus.authenticated;
+    final playlistRepo = PlaylistRepository();
+    final handler = AppAudioHandler.instance;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF111827),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                mediaItem.title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ),
+            if (isAuthenticated && trackId != null && trackId.isNotEmpty) ...[
+              ListTile(
+                leading: const Icon(Icons.playlist_add, color: Colors.white70),
+                title: const Text('Add to playlist', style: TextStyle(color: Colors.white)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  _showAddToPlaylistSheet(context, ref, trackId, playlistRepo);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.favorite_border, color: Colors.white70),
+                title: const Text('Like', style: TextStyle(color: Colors.white)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _addToLikedPlaylist(context, ref, trackId, playlistRepo);
+                },
+              ),
+            ],
+            ListTile(
+              leading: const Icon(Icons.remove_circle_outline, color: Colors.white70),
+              title: const Text('Remove from queue', style: TextStyle(color: Colors.white)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await handler.removeCurrentFromQueue();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Removed from queue'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.share, color: Colors.white70),
+              title: const Text('Share', style: TextStyle(color: Colors.white)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await Share.share(
+                  'Check out "${mediaItem.title}" by ${mediaItem.artist ?? "Unknown"} on EchoNova!',
+                  subject: mediaItem.title,
+                );
+              },
+            ),
+            if (!isAuthenticated)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Sign in to add to playlist or like',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static void _showAddToPlaylistSheet(
+    BuildContext context,
+    WidgetRef ref,
+    String trackId,
+    PlaylistRepository playlistRepo,
+  ) async {
+    List<Playlist> playlists;
+    try {
+      playlists = await playlistRepo.list();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load playlists: $e'), behavior: SnackBarBehavior.floating),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    if (playlists.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Create a playlist first in Library'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final chosen = await showModalBottomSheet<Playlist>(
+      context: context,
+      backgroundColor: const Color(0xFF111827),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Add to playlist',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
+              ),
+            ),
+            ...playlists.map((p) => ListTile(
+              leading: const Icon(Icons.playlist_play, color: Colors.white70),
+              title: Text(p.name, style: const TextStyle(color: Colors.white)),
+              subtitle: Text('${p.tracksId.length} tracks', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+              onTap: () => Navigator.pop(ctx, p),
+            )),
+          ],
+        ),
+      ),
+    );
+    if (chosen != null && context.mounted) {
+      try {
+        await playlistRepo.addTracks(chosen.id, [trackId]);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Added to ${chosen.name}'), behavior: SnackBarBehavior.floating),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed: $e'), behavior: SnackBarBehavior.floating),
+          );
+        }
+      }
+    }
+  }
+
+  static Future<void> _addToLikedPlaylist(
+    BuildContext context,
+    WidgetRef ref,
+    String trackId,
+    PlaylistRepository playlistRepo,
+  ) async {
+    try {
+      final playlists = await playlistRepo.list();
+      Playlist? liked;
+      try {
+        liked = playlists.firstWhere((p) => p.name == 'Liked');
+      } catch (_) {}
+      if (liked == null) {
+        liked = await playlistRepo.create(CreatePlaylistRequest(name: 'Liked'));
+      }
+      await playlistRepo.addTracks(liked.id, [trackId]);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Added to Liked'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
+  }
+
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
     final minutes = twoDigits(duration.inMinutes.remainder(60));

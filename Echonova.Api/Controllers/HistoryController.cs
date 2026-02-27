@@ -31,9 +31,9 @@ public class HistoryController : ControllerBase
     [HttpPut]
     public async Task<IActionResult> RecordPlay([FromBody] RecordPlayRequest request, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.TrackId) || !Guid.TryParse(request.TrackId, out var trackId))
-            return BadRequest(new { message = "Invalid track_id." });
-        var result = await _history.RecordPlayAsync(UserId, trackId, ct);
+        if (string.IsNullOrWhiteSpace(request.TrackId))
+            return BadRequest(new { message = "TrackId is required." });
+        var result = await _history.RecordPlayAsync(UserId, request.TrackId, ct);
         return result == null ? BadRequest() : Ok(result);
     }
 }

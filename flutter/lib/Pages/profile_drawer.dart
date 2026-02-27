@@ -81,20 +81,35 @@ class ProfileDrawer extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 35,
-            backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-            child: isLoading
-                ? const SizedBox(
-                    width: 30,
-                    height: 30,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    isAuthenticated ? Icons.person : Icons.person_outline,
-                    size: 40,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+          GestureDetector(
+            onTap: isAuthenticated
+                ? () {
+                    Navigator.pop(context);
+                    context.push('/profile');
+                  }
+                : null,
+            child: CircleAvatar(
+              radius: 35,
+              backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+              backgroundImage: isAuthenticated &&
+                      user?.profileImageUrl != null &&
+                      user!.profileImageUrl!.isNotEmpty
+                  ? NetworkImage(user!.profileImageUrl!)
+                  : null,
+              child: isLoading
+                  ? const SizedBox(
+                      width: 30,
+                      height: 30,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : (user?.profileImageUrl == null || user!.profileImageUrl!.isEmpty)
+                      ? Icon(
+                          isAuthenticated ? Icons.person : Icons.person_outline,
+                          size: 40,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      : null,
+            ),
           ),
           const SizedBox(height: 16),
           if (isLoading)

@@ -8,6 +8,7 @@ public interface IUserService
 {
     Task<UserMeResponse?> GetMeAsync(Guid userId, CancellationToken ct = default);
     Task<UserMeResponse?> UpdateMeAsync(Guid userId, UpdateMeRequest request, CancellationToken ct = default);
+    Task<UserMeResponse?> UpdateProfileImageAsync(Guid userId, string profileImageUrl, CancellationToken ct = default);
 }
 
 public class UserService : IUserService
@@ -42,6 +43,15 @@ public class UserService : IUserService
         return await GetMeAsync(userId, ct);
     }
 
+    public async Task<UserMeResponse?> UpdateProfileImageAsync(Guid userId, string profileImageUrl, CancellationToken ct = default)
+    {
+        await _users.UpdateOneAsync(
+            u => u.Id == userId,
+            Builders<User>.Update.Set(u => u.ProfileImageUrl, profileImageUrl),
+            cancellationToken: ct);
+        return await GetMeAsync(userId, ct);
+    }
+
     private static UserMeResponse ToResponse(User u) =>
-        new(u.Id, u.Username, u.Email, u.Preference, u.ReceiveRecommendationEmails);
+        new(u.Id, u.Username, u.Email, u.Preference, u.ReceiveRecommendationEmails, u.ProfileImageUrl);
 }

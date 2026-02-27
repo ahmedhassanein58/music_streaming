@@ -4,6 +4,7 @@ class User {
   final String email;
   final List<String> preferences;
   final bool receiveRecommendationEmails;
+  final String? profileImageUrl;
 
   User({
     required this.id,
@@ -11,6 +12,7 @@ class User {
     required this.email,
     required this.preferences,
     required this.receiveRecommendationEmails,
+    this.profileImageUrl,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -23,6 +25,7 @@ class User {
               .toList() ??
           [],
       receiveRecommendationEmails: json["receiveRecommendationEmails"] ?? false,
+      profileImageUrl: json["profileImageUrl"]?.toString(),
     );
   }
 
@@ -33,6 +36,7 @@ class User {
       "email": email,
       "preference": preferences,
       "receiveRecommendationEmails": receiveRecommendationEmails,
+      if (profileImageUrl != null) "profileImageUrl": profileImageUrl,
     };
   }
 
@@ -42,6 +46,7 @@ class User {
     String? email,
     List<String>? preferences,
     bool? receiveRecommendationEmails,
+    String? profileImageUrl,
   }) {
     return User(
       id: id ?? this.id,
@@ -50,6 +55,7 @@ class User {
       preferences: preferences ?? this.preferences,
       receiveRecommendationEmails:
           receiveRecommendationEmails ?? this.receiveRecommendationEmails,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
     );
   }
 }

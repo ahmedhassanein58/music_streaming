@@ -7,13 +7,13 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using MongoDB.Bson.Serialization;
 
-// Allow Song Id and TrackId to deserialize from MongoDB ObjectId (existing Atlas data)
+// Allow Song _id to deserialize from MongoDB ObjectId (existing Atlas data)
+// TrackId is now a plain string ("829", "7762", etc.) - no GUID conversion needed.
 BsonClassMap.RegisterClassMap<Song>(cm =>
 {
     cm.AutoMap();
     cm.SetIgnoreExtraElements(true);
     cm.MapIdMember(s => s.Id).SetSerializer(new GuidAcceptingObjectIdSerializer());
-    cm.MapMember(s => s.TrackId).SetSerializer(new GuidAcceptingObjectIdSerializer());
 });
 
 // Ignore extra elements in embedded docs (e.g. s3_url stored inside audio_feature in some documents)
@@ -23,7 +23,7 @@ BsonClassMap.RegisterClassMap<AudioFeature>(cm =>
     cm.SetIgnoreExtraElements(true);
 });
 
-// Allow User, Admin, Playlist, History, AnonymousSession _id (and some Guid fields) from ObjectId
+// Allow User, Admin, Playlist, History _id (and some Guid fields) from ObjectId
 var guidSerializer = new GuidAcceptingObjectIdSerializer();
 BsonClassMap.RegisterClassMap<User>(cm =>
 {
@@ -44,16 +44,11 @@ BsonClassMap.RegisterClassMap<Playlist>(cm =>
 BsonClassMap.RegisterClassMap<History>(cm =>
 {
     cm.AutoMap();
+    cm.SetIgnoreExtraElements(true);
     cm.MapIdMember(h => h.Id).SetSerializer(guidSerializer);
     cm.MapMember(h => h.UserId).SetSerializer(guidSerializer);
-    cm.MapMember(h => h.TrackId).SetSerializer(guidSerializer);
+    // TrackId is now a plain string - no GUID serializer
 });
-BsonClassMap.RegisterClassMap<AnonymousSession>(cm =>
-{
-    cm.AutoMap();
-    cm.MapIdMember(s => s.Id).SetSerializer(guidSerializer);
-});
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<MongoDbOptions>(builder.Configuration.GetSection(MongoDbOptions.SectionName));
@@ -61,8 +56,10 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptio
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.SectionName));
 builder.Services.Configure<AwsOptions>(builder.Configuration.GetSection(AwsOptions.SectionName));
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.SectionName));
+builder.Services.Configure<MlServicesOptions>(builder.Configuration.GetSection(MlServicesOptions.SectionName));
 
 builder.Services.AddMongoDb(builder.Configuration);
+builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
 builder.Services.AddSingleton<IJwtService, JwtService>();
 builder.Services.AddSingleton<IEmailService, EmailService>();
@@ -72,8 +69,10 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ISongService, SongService>();
 builder.Services.AddScoped<IPlaylistService, PlaylistService>();
 builder.Services.AddScoped<IHistoryService, HistoryService>();
-builder.Services.AddScoped<IAnonymousSessionService, AnonymousSessionService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
+builder.Services.AddScoped<IRecommendationService, RecommendationService>();
+builder.Services.AddScoped<IEmotionService, EmotionService>();
+builder.Services.AddScoped<IProfileImageStorageService, LocalProfileImageStorageService>();
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -161,6 +160,7 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+app.UseStaticFiles();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();

@@ -194,6 +194,19 @@ class AppAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await _playFromQueueIndex(index);
   }
 
+  /// Remove the currently playing item from the queue. Plays next if available.
+  Future<void> removeCurrentFromQueue() async {
+    if (_currentIndex < 0 || _currentIndex >= _queue.length) return;
+    _queue.removeAt(_currentIndex);
+    if (_queue.isEmpty) {
+      await stop();
+      return;
+    }
+    if (_currentIndex >= _queue.length) _currentIndex = _queue.length - 1;
+    queue.add(List.unmodifiable(_queue));
+    await _playFromQueueIndex(_currentIndex);
+  }
+
   @override
   Future<void> onTaskRemoved() async {
     await stop();

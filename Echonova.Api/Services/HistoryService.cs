@@ -7,7 +7,8 @@ namespace Echonova.Api.Services;
 public interface IHistoryService
 {
     Task<List<HistoryResponse>> ListByUserAsync(Guid userId, CancellationToken ct = default);
-    Task<HistoryResponse?> RecordPlayAsync(Guid userId, Guid trackId, CancellationToken ct = default);
+    Task<List<string>> GetTopPlayedTrackIdsAsync(Guid userId, int limit, CancellationToken ct = default);
+    Task<HistoryResponse?> RecordPlayAsync(Guid userId, string trackId, CancellationToken ct = default);
 }
 
 public class HistoryService : IHistoryService
@@ -19,6 +20,16 @@ public class HistoryService : IHistoryService
     {
         _history = history;
         _songs = songs;
+    }
+
+    public async Task<List<string>> GetTopPlayedTrackIdsAsync(Guid userId, int limit, CancellationToken ct = default)
+    {
+        var list = await _history.Find(h => h.UserId == userId)
+            .SortByDescending(h => h.PlayCount)
+            .ThenByDescending(h => h.LastPlayed)
+            .Limit(limit)
+            .ToListAsync(ct);
+        return list.Select(h => h.TrackId).Where(id => !string.IsNullOrWhiteSpace(id)).ToList();
     }
 
     public async Task<List<HistoryResponse>> ListByUserAsync(Guid userId, CancellationToken ct = default)
@@ -42,8 +53,9 @@ public class HistoryService : IHistoryService
         return result;
     }
 
-    public async Task<HistoryResponse?> RecordPlayAsync(Guid userId, Guid trackId, CancellationToken ct = default)
+    public async Task<HistoryResponse?> RecordPlayAsync(Guid userId, string trackId, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(trackId)) return null;
         var song = await _songs.GetByTrackIdAsync(trackId, ct);
         var title = song?.Title;
         var artist = song?.Artist;

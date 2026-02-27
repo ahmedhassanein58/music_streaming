@@ -1,3 +1,4 @@
+using Echonova.Api.DTOs;
 using Echonova.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -27,16 +28,19 @@ public class SongsController : ControllerBase
         return Ok(result);
     }
 
-    [HttpGet("{trackId:guid}")]
-    public async Task<IActionResult> GetByTrackId(Guid trackId, CancellationToken ct)
+    [HttpGet("{trackId}")]
+    public async Task<IActionResult> GetByTrackId(string trackId, CancellationToken ct)
     {
         var song = await _songs.GetByTrackIdAsync(trackId, ct);
         if (song == null) return NotFound();
         return Ok(song);
     }
 
+    /// <summary>
+    /// Accepts a list of track IDs (e.g. "829", "7762") and returns matching songs.
+    /// </summary>
     [HttpPost("by-ids")]
-    public async Task<IActionResult> GetByTrackIds([FromBody] List<Guid> trackIds, CancellationToken ct = default)
+    public async Task<IActionResult> GetByTrackIds([FromBody] List<string>? trackIds, CancellationToken ct = default)
     {
         if (trackIds == null || trackIds.Count == 0) return Ok(new List<object>());
         var list = await _songs.GetByTrackIdsAsync(trackIds, ct);

@@ -53,7 +53,7 @@
 /home/abraam/Desktop/Business/GP/Echonova.Api/bin/Debug/net9.0/Swashbuckle.AspNetCore.SwaggerUI.dll
 /home/abraam/Desktop/Business/GP/music_streaming/Echonova.Api/bin/Debug/net9.0/appsettings.Development.json
 /home/abraam/Desktop/Business/GP/music_streaming/Echonova.Api/bin/Debug/net9.0/appsettings.json
-/home/abraam/Desktop/Business/GP/music_streaming/Echonova.Api/bin/Debug/net9.0/echonova-api-schema.json
+/home/abraam/Desktop/Business/GP/music_streaming/Echonova.Api/bin/Debug/net9.0/Echonova.Api.staticwebassets.runtime.json
 /home/abraam/Desktop/Business/GP/music_streaming/Echonova.Api/bin/Debug/net9.0/Echonova.Api.staticwebassets.endpoints.json
 /home/abraam/Desktop/Business/GP/music_streaming/Echonova.Api/bin/Debug/net9.0/Echonova.Api
 /home/abraam/Desktop/Business/GP/music_streaming/Echonova.Api/bin/Debug/net9.0/Echonova.Api.deps.json

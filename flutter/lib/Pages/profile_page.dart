@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import '../core/providers/auth_provider.dart';
 import '../core/models/user_model.dart';
+import '../core/network/user_repository.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -14,6 +16,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   late TextEditingController _usernameController;
   bool _receiveEmails = false;
   bool _isSaving = false;
+  bool _isUploadingImage = false;
+  final UserRepository _userRepo = UserRepository();
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -53,6 +58,67 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     }
   }
 
+  Future<void> _pickAndUploadImage(ImageSource source) async {
+    try {
+      final picked = await _picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (picked == null || !mounted) return;
+      setState(() => _isUploadingImage = true);
+      final updated = await _userRepo.uploadProfileImage(picked.path);
+      ref.read(authProvider.notifier).updateUserFromResponse(updated);
+      if (mounted) {
+        setState(() => _isUploadingImage = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile picture updated')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploadingImage = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e')),
+        );
+      }
+    }
+  }
+
+  void _showImageSourceSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF111827),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Colors.white70),
+              title: const Text('Choose from gallery', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndUploadImage(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.white70),
+              title: const Text('Take photo', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndUploadImage(ImageSource.camera);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -87,12 +153,54 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          Center(
-            child: CircleAvatar(
-              radius: 50,
-              backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              child: Icon(Icons.person, size: 60, color: Theme.of(context).colorScheme.primary),
+          GestureDetector(
+            onTap: _isUploadingImage ? null : _showImageSourceSheet,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  backgroundImage: user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty
+                      ? NetworkImage(user.profileImageUrl!)
+                      : null,
+                  child: user.profileImageUrl == null || user.profileImageUrl!.isEmpty
+                      ? Icon(Icons.person, size: 60, color: Theme.of(context).colorScheme.primary)
+                      : null,
+                ),
+                if (_isUploadingImage)
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(50),
+                    ),
+                    child: const Center(
+                      child: SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      ),
+                    ),
+                  )
+                else
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      child: const Icon(Icons.camera_alt, size: 20, color: Colors.white),
+                    ),
+                  ),
+              ],
             ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tap to change photo',
+            style: TextStyle(fontSize: 12, color: Colors.grey[400]),
           ),
           const SizedBox(height: 32),
           TextField(

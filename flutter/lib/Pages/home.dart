@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:music_client/audio_service.dart';
@@ -6,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:music_client/core/models/song_model.dart';
 import 'package:music_client/core/models/playlist_model.dart';
 import 'package:music_client/core/network/playlist_repository.dart';
+import 'package:music_client/core/network/recommendation_repository.dart';
 import 'package:music_client/core/network/song_repository.dart';
 import 'package:music_client/core/network/history_repository.dart';
 import 'package:music_client/Pages/profile_drawer.dart';
@@ -29,6 +32,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   final SongRepository _songRepo = SongRepository();
   final HistoryRepository _historyRepo = HistoryRepository();
   final PlaylistRepository _playlistRepo = PlaylistRepository();
+  final RecommendationRepository _recRepo = RecommendationRepository();
 
   @override
   void initState() {
@@ -57,8 +61,16 @@ class _HomePageState extends ConsumerState<HomePage> {
           if (g.isNotEmpty) genres.add(g);
         }
       }
-      suggested = items.length >= 10 ? items.sublist(0, 10) : items;
-      allSongs = items;
+      // Suggested: use recommendation API from most played history when authenticated
+      final authState = ref.read(authProvider);
+      if (authState.status == AuthStatus.authenticated) {
+        final recs = await _recRepo.getSuggested();
+        suggested = recs.isNotEmpty ? recs : (items.length >= 10 ? items.sublist(0, 10) : items);
+      } else {
+        suggested = items.length >= 10 ? items.sublist(0, 10) : items;
+      }
+      // Discover: shuffle so each visit shows different order
+      allSongs = List<Song>.from(items)..shuffle(Random());
       final sectionMap = <String, List<Song>>{};
       final genreList = genres.toList()..sort();
       for (final g in genreList.take(2)) {
@@ -127,6 +139,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         title: song.title,
         artist: song.artist,
         album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
+        extras: {'trackId': song.trackId},
       );
 
       handler.playMediaItem(mediaItem).catchError((e) {
@@ -176,6 +189,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         title: song.title,
         artist: song.artist,
         album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
+        extras: {'trackId': song.trackId},
       );
       await handler.addQueueItem(mediaItem);
       if (mounted) {
@@ -204,7 +218,26 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/images/logo.png',
+              width: 30,
+              height: 30,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              widget.title,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ],
+        ),
         actions: [
           _ProfileIcon(),
         ],
@@ -222,7 +255,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Widget _buildBody() {
     if (isLoading) {
-      return const LoadingView();
+      return const _HomeSkeletonView();
     }
     if (isError) {
       return ErrorView(message: errorMessage, onRetry: _retry);
@@ -233,6 +266,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final audioHandler = AppAudioHandler.instance;
     return RefreshIndicator(
       onRefresh: _fetchSongs,
+      color: Theme.of(context).colorScheme.primary,
       child: StreamBuilder<MediaItem?>(
         stream: audioHandler.mediaItem,
         builder: (context, mediaSnapshot) {
@@ -242,8 +276,11 @@ class _HomePageState extends ConsumerState<HomePage> {
             builder: (context, stateSnapshot) {
               final isPlaying = stateSnapshot.data?.playing ?? false;
               final sections = <Widget>[];
+              sections.add(const _WelcomeSection());
+              sections.add(const SizedBox(height: 28));
               if (suggested.isNotEmpty) {
                 sections.add(_SectionTitle('Suggested for you'));
+                sections.add(const SizedBox(height: 12));
                 sections.add(_HorizontalSongStrip(
                   songs: suggested,
                   currentMediaId: currentMediaId,
@@ -252,11 +289,28 @@ class _HomePageState extends ConsumerState<HomePage> {
                   onAddToQueue: _addToQueue,
                   onAddToPlaylist: onAddToPlaylist,
                 ));
+                sections.add(const SizedBox(height: 32));
+              }
+              if (allSongs.isNotEmpty) {
+                sections.add(_SectionTitle('Discover'));
+                sections.add(const SizedBox(height: 12));
+                sections.add(
+                  _DiscoverSongsSection(
+                    songs: allSongs,
+                    currentMediaId: currentMediaId,
+                    isPlaying: isPlaying,
+                    onPlay: _playSong,
+                    onAddToQueue: _addToQueue,
+                    onAddToPlaylist: onAddToPlaylist,
+                  ),
+                );
+                sections.add(const SizedBox(height: 32));
               }
               for (final e in genreSections.entries) {
                 if (e.value.isEmpty) continue;
-                sections.add(_GenreSectionWithImage(
-                  genre: e.key,
+                sections.add(_SectionTitle(e.key));
+                sections.add(const SizedBox(height: 12));
+                sections.add(_HorizontalSongStrip(
                   songs: e.value,
                   currentMediaId: currentMediaId,
                   isPlaying: isPlaying,
@@ -264,21 +318,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                   onAddToQueue: _addToQueue,
                   onAddToPlaylist: onAddToPlaylist,
                 ));
+                sections.add(const SizedBox(height: 32));
               }
-              if (allSongs.isNotEmpty) {
-                sections.add(_SectionTitle('All songs'));
-                sections.add(_VerticalSongList(
-                  songs: allSongs,
-                  currentMediaId: currentMediaId,
-                  isPlaying: isPlaying,
-                  audioHandler: audioHandler,
-                  onPlay: _playSong,
-                  onAddToQueue: _addToQueue,
-                  onAddToPlaylist: onAddToPlaylist,
-                ));
-              }
+              sections.add(const SizedBox(height: 32));
               return ListView(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 children: sections,
               );
             },
@@ -409,6 +453,139 @@ class LoadingView extends StatelessWidget {
   }
 }
 
+// ── Skeleton loading screen ────────────────────────────────────────────────
+class _HomeSkeletonView extends StatefulWidget {
+  const _HomeSkeletonView();
+
+  @override
+  State<_HomeSkeletonView> createState() => _HomeSkeletonViewState();
+}
+
+class _HomeSkeletonViewState extends State<_HomeSkeletonView>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+    _anim = Tween<double>(begin: -1.5, end: 2.5).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  BoxDecoration _shimmer({double radius = 8}) => BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        gradient: LinearGradient(
+          begin: Alignment(_anim.value - 1, 0),
+          end: Alignment(_anim.value, 0),
+          colors: const [
+            Color(0xFF111827),
+            Color(0xFF1F2F45),
+            Color(0xFF111827),
+          ],
+        ),
+      );
+
+  Widget _box(double w, double h, {double r = 8}) =>
+      Container(width: w, height: h, decoration: _shimmer(radius: r));
+
+  Widget _gridRow(double cardW, double cardH) => Row(
+        children: [
+          _box(cardW, cardH, r: 12),
+          const SizedBox(width: 10),
+          _box(cardW, cardH, r: 12),
+        ],
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (context, _) => ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        children: [
+          // ── Welcome ────────────────────────────────────────────────
+          _box(180, 28, r: 6),
+          const SizedBox(height: 10),
+          _box(230, 15, r: 5),
+          const SizedBox(height: 36),
+
+          // ── Suggested for you ──────────────────────────────────────
+          _box(170, 20, r: 5),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 215,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              itemCount: 4,
+              itemBuilder: (_, __) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _box(140, 140, r: 12),
+                    const SizedBox(height: 10),
+                    _box(110, 13, r: 4),
+                    const SizedBox(height: 6),
+                    _box(75, 11, r: 4),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 36),
+
+          // ── Discover ───────────────────────────────────────────────
+          _box(100, 20, r: 5),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 10.0;
+              final cardW = (constraints.maxWidth - spacing) / 2;
+              final cardH = cardW + 46.0;
+              return Column(
+                children: [
+                  _gridRow(cardW, cardH),
+                  const SizedBox(height: 10),
+                  _gridRow(cardW, cardH),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 28),
+
+          // ── Dot indicator placeholder ──────────────────────────────
+          Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(
+                3,
+                (i) => Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: i == 0 ? 20 : 6,
+                  height: 6,
+                  decoration: _shimmer(radius: 999),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class ErrorView extends StatelessWidget {
   final String? message;
   final VoidCallback onRetry;
@@ -489,111 +666,72 @@ class EmptyView extends StatelessWidget {
   }
 }
 
+class _WelcomeSection extends StatelessWidget {
+  const _WelcomeSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Logo
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 56,
+              height: 56,
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Good evening',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: -0.8,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                'Find something to listen to',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.white.withOpacity(0.6),
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SectionTitle extends StatelessWidget {
   final String title;
   const _SectionTitle(this.title);
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      padding: const EdgeInsets.only(left: 0, bottom: 4),
       child: Text(
         title,
         style: const TextStyle(
           fontSize: 20,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w600,
           color: Colors.white,
+          letterSpacing: -0.3,
         ),
       ),
-    );
-  }
-}
-
-/// Genre section with a photo card and horizontal song strip.
-class _GenreSectionWithImage extends StatelessWidget {
-  final String genre;
-  final List<Song> songs;
-  final String? currentMediaId;
-  final bool isPlaying;
-  final void Function(Song) onPlay;
-  final void Function(Song) onAddToQueue;
-  final void Function(Song)? onAddToPlaylist;
-
-  const _GenreSectionWithImage({
-    required this.genre,
-    required this.songs,
-    required this.currentMediaId,
-    required this.isPlaying,
-    required this.onPlay,
-    required this.onAddToQueue,
-    this.onAddToPlaylist,
-  });
-
-  static String _imageUrlForGenre(String name) {
-    final seed = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-    return 'https://picsum.photos/seed/${seed.isEmpty ? "genre" : seed}/400/200';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              height: 100,
-              width: double.infinity,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    _imageUrlForGenre(genre),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey[800],
-                      child: const Icon(Icons.music_note, size: 48, color: Colors.grey),
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
-                      ),
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.bottomLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        genre,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        _HorizontalSongStrip(
-          songs: songs,
-          currentMediaId: currentMediaId,
-          isPlaying: isPlaying,
-          onPlay: onPlay,
-          onAddToQueue: onAddToQueue,
-          onAddToPlaylist: onAddToPlaylist,
-        ),
-      ],
     );
   }
 }
@@ -618,10 +756,11 @@ class _HorizontalSongStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 160,
+      height: 215,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        clipBehavior: Clip.none,
         itemCount: songs.length,
         itemBuilder: (context, index) {
           final song = songs[index];
@@ -640,54 +779,266 @@ class _HorizontalSongStrip extends StatelessWidget {
   }
 }
 
-class _VerticalSongList extends StatelessWidget {
+class _DiscoverSongsSection extends StatefulWidget {
   final List<Song> songs;
   final String? currentMediaId;
   final bool isPlaying;
-  final AppAudioHandler audioHandler;
   final void Function(Song) onPlay;
   final void Function(Song) onAddToQueue;
   final void Function(Song)? onAddToPlaylist;
 
-  const _VerticalSongList({
+  const _DiscoverSongsSection({
     required this.songs,
     required this.currentMediaId,
     required this.isPlaying,
-    required this.audioHandler,
     required this.onPlay,
     required this.onAddToQueue,
     this.onAddToPlaylist,
   });
 
   @override
+  State<_DiscoverSongsSection> createState() => _DiscoverSongsSectionState();
+}
+
+class _DiscoverSongsSectionState extends State<_DiscoverSongsSection> {
+  late final PageController _pageController;
+  int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: songs.length,
-      itemBuilder: (context, index) {
-        final song = songs[index];
-        final isCurrentlyPlaying = currentMediaId != null && currentMediaId == song.s3Url;
-        return SongTile(
-          song: song,
-          isCurrentlyPlaying: isCurrentlyPlaying,
-          isPlaying: isCurrentlyPlaying && isPlaying,
-          onTap: () {
-            if (isCurrentlyPlaying) {
-              if (isPlaying) {
-                audioHandler.pause();
-              } else {
-                audioHandler.play();
-              }
-            } else {
-              onPlay(song);
-            }
-          },
-          onAddToQueue: () => onAddToQueue(song),
-          onAddToPlaylist: onAddToPlaylist,
+    if (widget.songs.isEmpty) return const SizedBox.shrink();
+
+    // Fixed 2×2 grid, 3 pages of 4 songs each = 12 songs total
+    const crossAxisCount = 2;
+    const rowCount = 2;
+    const pageSize = crossAxisCount * rowCount; // 4
+    const totalPages = 3;
+    const spacing = 10.0;
+    const dotsHeight = 28.0;
+    // Extra vertical space for title + artist text below the square image
+    const textAreaHeight = 46.0; // 8 gap + ~16 title + 3 gap + ~16 artist + 3 buffer
+
+    // Take at most totalPages * pageSize songs, pad if needed
+    final source = widget.songs.take(totalPages * pageSize).toList();
+
+    final chunks = <List<Song>>[];
+    for (var i = 0; i < totalPages; i++) {
+      final start = i * pageSize;
+      if (start >= source.length) {
+        final padded = List<Song>.generate(
+          pageSize,
+          (j) => source[(start + j) % source.length],
+        );
+        chunks.add(padded);
+      } else {
+        final end = (start + pageSize).clamp(0, source.length);
+        chunks.add(source.sublist(start, end));
+      }
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Card width = half of available width minus the one inter-column gap
+        final cardWidth = (constraints.maxWidth - spacing) / crossAxisCount;
+        // Card height = square image + text area below
+        final cardHeight = cardWidth + textAreaHeight;
+        final aspectRatio = cardWidth / cardHeight;
+
+        final totalHeight =
+            rowCount * cardHeight + (rowCount - 1) * spacing + dotsHeight + 12;
+
+        return SizedBox(
+          height: totalHeight,
+          child: Column(
+            children: [
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: chunks.length,
+                  physics: const BouncingScrollPhysics(),
+                  onPageChanged: (index) =>
+                      setState(() => _currentPage = index),
+                  itemBuilder: (context, pageIndex) {
+                    final pageSongs = chunks[pageIndex];
+                    return GridView.builder(
+                      padding: EdgeInsets.zero,
+                      gridDelegate:
+                          SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        crossAxisSpacing: spacing,
+                        mainAxisSpacing: spacing,
+                        childAspectRatio: aspectRatio,
+                      ),
+                      itemCount: pageSongs.length,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemBuilder: (context, index) {
+                        final song = pageSongs[index];
+                        final isCurrentlyPlaying =
+                            widget.currentMediaId != null &&
+                                widget.currentMediaId == song.s3Url;
+                        return _DiscoverSongCard(
+                          song: song,
+                          isCurrentlyPlaying: isCurrentlyPlaying,
+                          isPlaying: isCurrentlyPlaying && widget.isPlaying,
+                          onTap: () => widget.onPlay(song),
+                          onAddToQueue: () => widget.onAddToQueue(song),
+                          onAddToPlaylist: widget.onAddToPlaylist != null
+                              ? () => widget.onAddToPlaylist!(song)
+                              : null,
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  chunks.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: _currentPage == index ? 20 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      color: _currentPage == index
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.grey[700],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
+    );
+  }
+}
+
+class _DiscoverSongCard extends StatelessWidget {
+  final Song song;
+  final bool isCurrentlyPlaying;
+  final bool isPlaying;
+  final VoidCallback onTap;
+  final VoidCallback onAddToQueue;
+  final VoidCallback? onAddToPlaylist;
+
+  const _DiscoverSongCard({
+    required this.song,
+    required this.isCurrentlyPlaying,
+    required this.isPlaying,
+    required this.onTap,
+    required this.onAddToQueue,
+    this.onAddToPlaylist,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  song.coverUrl != null && song.coverUrl!.isNotEmpty
+                      ? Image.network(
+                          song.coverUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                        )
+                      : _buildPlaceholder(),
+                  if (isCurrentlyPlaying)
+                    Container(
+                      color: Colors.black38,
+                      child: Center(
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            song.title.isNotEmpty ? song.title : 'Unknown',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            song.artist.isNotEmpty ? song.artist : 'Unknown artist',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      color: const Color(0xFF1E293B),
+      child: const Center(
+        child: Icon(Icons.music_note, color: Color(0xFF64748B), size: 32),
+      ),
     );
   }
 }
@@ -712,58 +1063,87 @@ class _CompactSongCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            width: 130,
-            height: 160,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 130,
-                  height: 118,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: isCurrentlyPlaying
-                        ? Theme.of(context).colorScheme.primary.withOpacity(0.3)
-                        : Colors.grey[800],
-                  ),
-                  child: Icon(
-                    isCurrentlyPlaying ? Icons.graphic_eq : Icons.music_note,
-                    size: 40,
-                    color: isCurrentlyPlaying
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey[600],
-                  ),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: SizedBox(
+          width: 140,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 140,
+                      height: 140,
+                      child: song.coverUrl != null && song.coverUrl!.isNotEmpty
+                          ? Image.network(
+                              song.coverUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => _buildPlaceholder(context),
+                            )
+                          : _buildPlaceholder(context),
+                    ),
+                    if (isCurrentlyPlaying)
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      )
+                    else
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  song.title.isNotEmpty ? song.title : 'Unknown',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                song.title.isNotEmpty ? song.title : 'Unknown',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
                 ),
-                Text(
-                  song.artist.isNotEmpty ? song.artist : 'Unknown artist',
-                  style: TextStyle(color: Colors.grey[400], fontSize: 11),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                song.artist.isNotEmpty ? song.artist : 'Unknown artist',
+                style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPlaceholder(BuildContext context) {
+    return Container(
+      color: const Color(0xFF1E293B),
+      child: const Icon(Icons.music_note, size: 48, color: Color(0xFF64748B)),
     );
   }
 }
@@ -802,16 +1182,35 @@ class SongTile extends StatelessWidget {
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        leading: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: isCurrentlyPlaying ? Theme.of(context).colorScheme.primary.withOpacity(0.3) : Colors.grey[800],
-          ),
-          child: isCurrentlyPlaying
-              ? Icon(Icons.graphic_eq, color: Theme.of(context).colorScheme.primary, size: 28)
-              : const Icon(Icons.music_note, color: Colors.grey, size: 28),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: song.coverUrl != null && song.coverUrl!.isNotEmpty
+              ? Image.network(
+                  song.coverUrl!,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 56,
+                    height: 56,
+                    color: isCurrentlyPlaying ? Theme.of(context).colorScheme.primary.withOpacity(0.3) : Colors.grey[800],
+                    child: Icon(
+                      isCurrentlyPlaying ? Icons.graphic_eq : Icons.music_note,
+                      color: isCurrentlyPlaying ? Theme.of(context).colorScheme.primary : Colors.grey,
+                      size: 28,
+                    ),
+                  ),
+                )
+              : Container(
+                  width: 56,
+                  height: 56,
+                  color: isCurrentlyPlaying ? Theme.of(context).colorScheme.primary.withOpacity(0.3) : Colors.grey[800],
+                  child: Icon(
+                    isCurrentlyPlaying ? Icons.graphic_eq : Icons.music_note,
+                    color: isCurrentlyPlaying ? Theme.of(context).colorScheme.primary : Colors.grey,
+                    size: 28,
+                  ),
+                ),
         ),
         title: Text(
           song.title.isNotEmpty ? song.title : 'Unknown Title',
@@ -1032,8 +1431,7 @@ class MainBottomNavigationBar extends StatelessWidget {
             context.go('/library');
             break;
           case 3:
-            // "Create collection" button: for now, navigate to Library
-            context.go('/library');
+            context.go('/library?create=1');
             break;
         }
       },

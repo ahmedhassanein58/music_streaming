@@ -44,11 +44,6 @@ public static class MongoDbServiceExtensions
         services.AddSingleton(sp =>
         {
             var db = sp.GetRequiredService<IMongoDatabase>();
-            return db.GetCollection<AnonymousSession>("anonymous_sessions");
-        });
-        services.AddSingleton(sp =>
-        {
-            var db = sp.GetRequiredService<IMongoDatabase>();
             return db.GetCollection<Admin>("admins");
         });
         return services;

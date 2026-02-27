@@ -37,14 +37,14 @@ class HistoryItem {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'userId': userId,
-        'trackId': trackId,
-        'playCount': playCount,
-        'lastPlayed': lastPlayed?.toIso8601String(),
-        if (title != null) 'title': title,
-        if (artist != null) 'artist': artist,
-      };
+    'id': id,
+    'userId': userId,
+    'trackId': trackId,
+    'playCount': playCount,
+    'lastPlayed': lastPlayed?.toIso8601String(),
+    if (title != null) 'title': title,
+    if (artist != null) 'artist': artist,
+  };
 }
 
 class RecordPlayRequest {

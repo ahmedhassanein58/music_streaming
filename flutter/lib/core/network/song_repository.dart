@@ -41,7 +41,7 @@ class SongRepository {
     }
   }
 
-  /// POST /songs/by-ids with body [trackId1, trackId2, ...]. Returns only songs that exist.
+  /// POST /songs/by-ids with body ["829", "7762", ...]. Returns matching songs.
   Future<List<Song>> getByTrackIds(List<String> trackIds) async {
     if (trackIds.isEmpty) return [];
     try {

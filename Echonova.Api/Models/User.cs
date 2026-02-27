@@ -23,4 +23,6 @@ public class User
     public DateTime? OtpExpire { get; set; }
     [BsonElement("receive_recommendation_emails")]
     public bool ReceiveRecommendationEmails { get; set; }
+    [BsonElement("profile_image_url")]
+    public string? ProfileImageUrl { get; set; }
 }

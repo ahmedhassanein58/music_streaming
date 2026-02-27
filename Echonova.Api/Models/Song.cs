@@ -9,9 +9,8 @@ public class Song
     [BsonRepresentation(BsonType.String)]
     public Guid Id { get; set; }
 
-    [BsonRepresentation(BsonType.String)]
     [BsonElement("track_id")]
-    public Guid TrackId { get; set; }
+    public string TrackId { get; set; } = string.Empty;
     [BsonElement("title")]
     public string Title { get; set; } = string.Empty;
     [BsonElement("artist")]
@@ -22,4 +21,6 @@ public class Song
     public AudioFeature AudioFeature { get; set; } = new();
     [BsonElement("s3_url")]
     public string S3Url { get; set; } = string.Empty;
+    [BsonElement("cover_url")]
+    public string? CoverUrl { get; set; }
 }

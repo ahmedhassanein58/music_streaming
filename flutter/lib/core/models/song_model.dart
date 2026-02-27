@@ -8,6 +8,7 @@ class Song {
   final List<String> genre;
   final AudioFeature audioFeature;
   final String s3Url;
+  final String? coverUrl;
 
   const Song({
     required this.id,
@@ -17,6 +18,7 @@ class Song {
     required this.genre,
     required this.audioFeature,
     required this.s3Url,
+    this.coverUrl,
   });
 
   factory Song.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,7 @@ class Song {
               Map<String, dynamic>.from(json['audioFeature'] as Map))
           : const AudioFeature(),
       s3Url: json['s3Url'] ?? '',
+      coverUrl: json['coverUrl']?.toString(),
     );
   }
 
@@ -45,6 +48,7 @@ class Song {
         'genre': genre,
         'audioFeature': audioFeature.toJson(),
         's3Url': s3Url,
+        if (coverUrl != null) 'coverUrl': coverUrl,
       };
 }
 

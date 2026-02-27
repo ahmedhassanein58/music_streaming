@@ -68,7 +68,7 @@ public class AdminController : ControllerBase
             catch { /* use defaults */ }
         }
 
-        var trackId = Guid.NewGuid();
+        var trackId = Guid.NewGuid().ToString();
         var key = $"tracks/{trackId}{ext}";
         string s3Url;
         await using (var stream = file.OpenReadStream())
@@ -90,16 +90,16 @@ public class AdminController : ControllerBase
         return StatusCode(201, song);
     }
 
-    [HttpPut("songs/{trackId:guid}")]
-    public async Task<IActionResult> UpdateSong(Guid trackId, [FromBody] AdminUpdateSongRequest request, CancellationToken ct)
+    [HttpPut("songs/{trackId}")]
+    public async Task<IActionResult> UpdateSong(string trackId, [FromBody] AdminUpdateSongRequest request, CancellationToken ct)
     {
         var song = await _admin.UpdateSongAsync(trackId, request, ct);
         if (song == null) return NotFound();
         return Ok(song);
     }
 
-    [HttpDelete("songs/{trackId:guid}")]
-    public async Task<IActionResult> DeleteSong(Guid trackId, CancellationToken ct)
+    [HttpDelete("songs/{trackId}")]
+    public async Task<IActionResult> DeleteSong(string trackId, CancellationToken ct)
     {
         var ok = await _admin.DeleteSongAsync(trackId, ct);
         if (!ok) return NotFound();

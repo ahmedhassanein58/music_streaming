@@ -94,6 +94,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Handle error (maybe show snackbar in UI)
     }
   }
+
+  void updateUserFromResponse(User updatedUser) {
+    state = AuthState.authenticated(updatedUser);
+  }
 }
 
 final authServiceProvider = StateProvider<AuthService>((ref) => AuthService());

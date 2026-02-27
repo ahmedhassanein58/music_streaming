@@ -12,9 +12,8 @@ public class History
     [BsonRepresentation(BsonType.String)]
     [BsonElement("user_id")]
     public Guid UserId { get; set; }
-    [BsonRepresentation(BsonType.String)]
     [BsonElement("track_id")]
-    public Guid TrackId { get; set; }
+    public string TrackId { get; set; } = string.Empty;
     [BsonElement("play_count")]
     public int PlayCount { get; set; }
     [BsonElement("last_played")]

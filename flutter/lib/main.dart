@@ -10,6 +10,7 @@ import 'package:music_client/Pages/login_page.dart';
 import 'package:music_client/Pages/signup.dart';
 import 'package:music_client/Pages/profile_page.dart';
 import 'package:music_client/audio_service.dart';
+import 'package:music_client/core/theme.dart';
 
 final GoRouter _router = GoRouter(
   routes: [
@@ -27,7 +28,9 @@ final GoRouter _router = GoRouter(
     ),
     GoRoute(
       path: '/library',
-      builder: (context, state) => const LibraryPage(),
+      builder: (context, state) => LibraryPage(
+        showCreateDialog: state.uri.queryParameters['create'] == '1',
+      ),
     ),
     GoRoute(
       path: '/login',
@@ -66,41 +69,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Echo Nova',
+      title: 'EchoNova',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.dark,
-        ),
-        scaffoldBackgroundColor: const Color(0xFF050814),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: true,
-          titleTextStyle: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        cardColor: const Color(0xFF0C1020),
-        snackBarTheme: const SnackBarThemeData(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Color(0xFF111827),
-          contentTextStyle: TextStyle(color: Colors.white),
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFF050814),
-          selectedItemColor: Colors.blueAccent,
-          unselectedItemColor: Color(0xFF7C8BA1),
-          showUnselectedLabels: true,
-          // selectedFontSize: 12,
-          // unselectedFontSize: 11,
-          type: BottomNavigationBarType.fixed,
-        ),
-      ),
+      theme: EchoNovaTheme.buildTheme(),
       routerConfig: _router,
     );
   }

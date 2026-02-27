@@ -7,10 +7,10 @@ namespace Echonova.Api.Services;
 public interface IAdminService
 {
     Task<SongListResponse> ListSongsAsync(int page, int pageSize, CancellationToken ct = default);
-    Task<SongResponse?> GetSongByTrackIdAsync(Guid trackId, CancellationToken ct = default);
-    Task<SongResponse?> CreateSongAsync(AdminCreateSongRequest request, string s3Url, Guid? trackId = null, CancellationToken ct = default);
-    Task<SongResponse?> UpdateSongAsync(Guid trackId, AdminUpdateSongRequest request, CancellationToken ct = default);
-    Task<bool> DeleteSongAsync(Guid trackId, CancellationToken ct = default);
+    Task<SongResponse?> GetSongByTrackIdAsync(string trackId, CancellationToken ct = default);
+    Task<SongResponse?> CreateSongAsync(AdminCreateSongRequest request, string s3Url, string? trackId = null, CancellationToken ct = default);
+    Task<SongResponse?> UpdateSongAsync(string trackId, AdminUpdateSongRequest request, CancellationToken ct = default);
+    Task<bool> DeleteSongAsync(string trackId, CancellationToken ct = default);
     Task<UserMeResponse?> CreateUserAsync(AdminCreateUserRequest request, CancellationToken ct = default);
     Task<List<UserMeResponse>> ListUsersAsync(int page, int pageSize, CancellationToken ct = default);
     Task<int> SendRecommendationEmailsNowAsync(CancellationToken ct = default);
@@ -48,18 +48,18 @@ public class AdminService : IAdminService
         return new SongListResponse(items.Select(ToSongResponse).ToList(), (int)total);
     }
 
-    public async Task<SongResponse?> GetSongByTrackIdAsync(Guid trackId, CancellationToken ct = default)
+    public async Task<SongResponse?> GetSongByTrackIdAsync(string trackId, CancellationToken ct = default)
     {
         var song = await _songs.Find(s => s.TrackId == trackId).FirstOrDefaultAsync(ct);
         return song == null ? null : ToSongResponse(song);
     }
 
-    public async Task<SongResponse?> CreateSongAsync(AdminCreateSongRequest request, string s3Url, Guid? trackId = null, CancellationToken ct = default)
+    public async Task<SongResponse?> CreateSongAsync(AdminCreateSongRequest request, string s3Url, string? trackId = null, CancellationToken ct = default)
     {
         var song = new Song
         {
             Id = Guid.NewGuid(),
-            TrackId = trackId ?? Guid.NewGuid(),
+            TrackId = trackId ?? Guid.NewGuid().ToString(),
             Title = request.Title,
             Artist = request.Artist,
             Genre = request.Genre,
@@ -70,7 +70,7 @@ public class AdminService : IAdminService
         return ToSongResponse(song);
     }
 
-    public async Task<SongResponse?> UpdateSongAsync(Guid trackId, AdminUpdateSongRequest request, CancellationToken ct = default)
+    public async Task<SongResponse?> UpdateSongAsync(string trackId, AdminUpdateSongRequest request, CancellationToken ct = default)
     {
         var updates = new List<UpdateDefinition<Song>>();
         if (request.Title != null) updates.Add(Builders<Song>.Update.Set(s => s.Title, request.Title));
@@ -84,7 +84,7 @@ public class AdminService : IAdminService
         return await GetSongByTrackIdAsync(trackId, ct);
     }
 
-    public async Task<bool> DeleteSongAsync(Guid trackId, CancellationToken ct = default)
+    public async Task<bool> DeleteSongAsync(string trackId, CancellationToken ct = default)
     {
         var result = await _songs.DeleteOneAsync(s => s.TrackId == trackId, ct);
         return result.DeletedCount > 0;
@@ -104,7 +104,7 @@ public class AdminService : IAdminService
             ReceiveRecommendationEmails = false
         };
         await _users.InsertOneAsync(user, cancellationToken: ct);
-        return new UserMeResponse(user.Id, user.Username, user.Email, user.Preference, user.ReceiveRecommendationEmails);
+        return new UserMeResponse(user.Id, user.Username, user.Email, user.Preference, user.ReceiveRecommendationEmails, user.ProfileImageUrl);
     }
 
     public async Task<List<UserMeResponse>> ListUsersAsync(int page, int pageSize, CancellationToken ct = default)
@@ -113,7 +113,7 @@ public class AdminService : IAdminService
             .Skip(page * pageSize)
             .Limit(pageSize)
             .ToListAsync(ct);
-        return list.Select(u => new UserMeResponse(u.Id, u.Username, u.Email, u.Preference, u.ReceiveRecommendationEmails)).ToList();
+        return list.Select(u => new UserMeResponse(u.Id, u.Username, u.Email, u.Preference, u.ReceiveRecommendationEmails, u.ProfileImageUrl)).ToList();
     }
 
     public async Task<int> SendRecommendationEmailsNowAsync(CancellationToken ct = default)
@@ -143,5 +143,5 @@ public class AdminService : IAdminService
     }
 
     private static SongResponse ToSongResponse(Song s) =>
-        new(s.Id, s.TrackId, s.Title, s.Artist, s.Genre, s.AudioFeature, s.S3Url);
+        new(s.Id, s.TrackId, s.Title, s.Artist, s.Genre, s.AudioFeature, s.S3Url, s.CoverUrl);
 }

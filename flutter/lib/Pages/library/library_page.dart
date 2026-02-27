@@ -5,7 +5,6 @@ import 'package:music_client/audio_service.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:music_client/core/models/playlist_model.dart';
 import 'package:music_client/core/models/history_model.dart';
-import 'package:music_client/core/models/audio_feature.dart';
 import 'package:music_client/core/models/song_model.dart';
 import 'package:music_client/core/network/playlist_repository.dart';
 import 'package:music_client/core/network/history_repository.dart';
@@ -14,7 +13,8 @@ import 'package:music_client/core/providers/auth_provider.dart';
 import 'package:music_client/Pages/home.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
-  const LibraryPage({super.key});
+  const LibraryPage({super.key, this.showCreateDialog = false});
+  final bool showCreateDialog;
 
   @override
   ConsumerState<LibraryPage> createState() => _LibraryPageState();
@@ -40,6 +40,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     _tabController = TabController(length: 2, vsync: this);
     _loadPlaylists();
     _loadHistory();
+    if (widget.showCreateDialog) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showCreatePlaylistDialog(context);
+      });
+    }
   }
 
   @override
@@ -403,15 +408,32 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
   }
 
   Future<void> _playSongFromTrackId(String trackId) async {
+    final handler = AppAudioHandler.instance;
+    final currentItem = handler.mediaItem.valueOrNull;
+    final isPlaying = handler.playbackState.valueOrNull?.playing ?? false;
+
+    // If this track is already loaded, just toggle play/pause
+    if (currentItem != null) {
+      final currentTrackId = currentItem.extras?['trackId']?.toString();
+      if (currentTrackId == trackId) {
+        if (isPlaying) {
+          handler.pause();
+        } else {
+          handler.play();
+        }
+        return;
+      }
+    }
+
     try {
       final song = await _songRepo.getByTrackId(trackId);
       if (song.s3Url.isEmpty) return;
-      final handler = AppAudioHandler.instance;
       final mediaItem = MediaItem(
         id: song.s3Url,
         title: song.title,
         artist: song.artist,
         album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
+        extras: {'trackId': song.trackId},
       );
       await handler.playMediaItem(mediaItem);
       await _recordPlayIfAuthenticated(trackId);
@@ -572,21 +594,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
 
   Future<List<Song>> _fetchTracks(List<String> trackIds) async {
     if (trackIds.isEmpty) return [];
-    final songs = await widget.songRepo.getByTrackIds(trackIds);
-    final byTrackId = {for (final s in songs) s.trackId: s};
-    return trackIds.map((id) {
-      final s = byTrackId[id];
-      if (s != null) return s;
-      return Song(
-        id: '',
-        trackId: id,
-        title: 'Unknown track',
-        artist: 'Unknown artist',
-        genre: const [],
-        audioFeature: const AudioFeature(),
-        s3Url: '',
-      );
-    }).toList();
+    return widget.songRepo.getByTrackIds(trackIds);
   }
 
   Future<void> _playAndRecord(BuildContext context, Song song) async {
@@ -612,6 +620,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
         title: song.title,
         artist: song.artist,
         album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
+        extras: {'trackId': song.trackId},
       ));
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -635,17 +644,57 @@ class _HistoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = item.title?.isNotEmpty == true ? item.title! : 'Unknown track';
     final artist = item.artist?.isNotEmpty == true ? item.artist! : 'Unknown artist';
-    return ListTile(
-      leading: const CircleAvatar(child: Icon(Icons.music_note)),
-      title: Text(title, style: const TextStyle(color: Colors.white)),
-      subtitle: Text(
-        '$artist • ${item.playCount} plays',
-        style: TextStyle(color: Colors.grey[400], fontSize: 12),
-      ),
-      trailing: IconButton(
-        icon: const Icon(Icons.play_arrow),
-        onPressed: () => onPlay(item.trackId),
-      ),
+    final handler = AppAudioHandler.instance;
+
+    return StreamBuilder<MediaItem?>(
+      stream: handler.mediaItem,
+      builder: (context, mediaSnapshot) {
+        return StreamBuilder<PlaybackState>(
+          stream: handler.playbackState,
+          builder: (context, stateSnapshot) {
+            final currentTrackId = mediaSnapshot.data?.extras?['trackId']?.toString();
+            final isThisTrack = currentTrackId == item.trackId;
+            final isPlaying = isThisTrack && (stateSnapshot.data?.playing ?? false);
+
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: isThisTrack
+                    ? Theme.of(context).colorScheme.primary.withOpacity(0.2)
+                    : Colors.white10,
+                child: Icon(
+                  isThisTrack ? Icons.graphic_eq : Icons.music_note,
+                  color: isThisTrack
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.white70,
+                  size: 20,
+                ),
+              ),
+              title: Text(
+                title,
+                style: TextStyle(
+                  color: isThisTrack
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.white,
+                  fontWeight: isThisTrack ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+              subtitle: Text(
+                '$artist • ${item.playCount} play${item.playCount == 1 ? '' : 's'}',
+                style: TextStyle(color: Colors.grey[400], fontSize: 12),
+              ),
+              trailing: IconButton(
+                icon: Icon(
+                  isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                  size: 32,
+                ),
+                color: Theme.of(context).colorScheme.primary,
+                onPressed: () => onPlay(item.trackId),
+              ),
+              onTap: () => onPlay(item.trackId),
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -59,6 +59,24 @@ public class GuidAcceptingObjectIdSerializer : SerializerBase<Guid>
         return new Guid(bytes);
     }
 
+    /// <summary>
+    /// Parses a track ID string (Guid, 24-char ObjectId hex, or plain string) into a Guid.
+    /// Use when accepting IDs from clients (e.g. playlists) that may store ObjectIds.
+    /// </summary>
+    public static Guid ParseTrackId(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) return Guid.Empty;
+        if (Guid.TryParse(s, out var guid)) return guid;
+        if (s.Length == 24 && IsHexString(s))
+        {
+            var bytes = new byte[16];
+            for (var i = 0; i < 12; i++)
+                bytes[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+            return new Guid(bytes);
+        }
+        return CreateDeterministicGuid(s);
+    }
+
     public override void Serialize(BsonSerializationContext context, BsonSerializationArgs args, Guid value)
     {
         DefaultSerializer.Serialize(context, args, value);
