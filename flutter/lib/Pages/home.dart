@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:music_client/audio_service.dart';
 import 'package:audio_service/audio_service.dart';
+import '../core/models/song_playback.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:music_client/core/models/song_model.dart';
 import 'package:music_client/core/models/playlist_model.dart';
@@ -134,13 +135,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     try {
       final handler = AppAudioHandler.instance;
-      final mediaItem = MediaItem(
-        id: playUrl,
-        title: song.title,
-        artist: song.artist,
-        album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
-        extras: {'trackId': song.trackId},
-      );
+      final mediaItem = song.toMediaItem();
 
       handler.playMediaItem(mediaItem).catchError((e) {
         if (!mounted) return;
@@ -184,13 +179,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     try {
       final handler = AppAudioHandler.instance;
-      final mediaItem = MediaItem(
-        id: playUrl,
-        title: song.title,
-        artist: song.artist,
-        album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
-        extras: {'trackId': song.trackId},
-      );
+      final mediaItem = song.toMediaItem();
       await handler.addQueueItem(mediaItem);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -277,6 +266,8 @@ class _HomePageState extends ConsumerState<HomePage> {
               final isPlaying = stateSnapshot.data?.playing ?? false;
               final sections = <Widget>[];
               sections.add(const _WelcomeSection());
+              sections.add(const SizedBox(height: 20));
+              sections.add(const _MoodScanCard());
               sections.add(const SizedBox(height: 28));
               if (suggested.isNotEmpty) {
                 sections.add(_SectionTitle('Suggested for you'));
@@ -676,7 +667,6 @@ class _WelcomeSection extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Logo
           ClipRRect(
             borderRadius: BorderRadius.circular(14),
             child: Image.asset(
@@ -711,6 +701,70 @@ class _WelcomeSection extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MoodScanCard extends ConsumerWidget {
+  const _MoodScanCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authProvider);
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return Material(
+      color: const Color(0xFF1F2937),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          if (auth.status != AuthStatus.authenticated) {
+            context.push('/login');
+            return;
+          }
+          context.push('/mood-scan');
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: primary.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.face_retouching_natural, color: primary, size: 32),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Scan Your Mood',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      auth.status == AuthStatus.authenticated
+                          ? 'Detect emotion and get genre-matched picks'
+                          : 'Sign in to unlock mood-based recommendations',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.grey[600]),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -35,9 +35,28 @@ class SignupRequest {
   }
 }
 
+class SignupResponse {
+  final String email;
+  final String username;
+  final bool requiresVerification;
+
+  SignupResponse({
+    required this.email,
+    required this.username,
+    required this.requiresVerification,
+  });
+
+  factory SignupResponse.fromJson(Map<String, dynamic> json) {
+    return SignupResponse(
+      email: json["email"] ?? "",
+      username: json["username"] ?? "",
+      requiresVerification: json["requiresVerification"] ?? true,
+    );
+  }
+}
+
 class AuthResponse {
   final String token;
-  // Note: isAdmin is not always present in all auth responses in OpenAPI but often returned
   final bool? isAdmin;
 
   AuthResponse({
@@ -51,4 +70,11 @@ class AuthResponse {
       isAdmin: json["isAdmin"],
     );
   }
+}
+
+class EmailNotVerifiedException implements Exception {
+  final String message;
+  EmailNotVerifiedException([this.message = "Email not verified."]);
+  @override
+  String toString() => message;
 }

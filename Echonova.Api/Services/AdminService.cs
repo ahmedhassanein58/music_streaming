@@ -23,19 +23,25 @@ public class AdminService : IAdminService
     private readonly IMongoCollection<History> _history;
     private readonly IEmailService _email;
     private readonly IPasswordHasher _hasher;
+    private readonly IUserRecommendationService _userRecs;
+    private readonly ISongService _songService;
 
     public AdminService(
         IMongoCollection<Song> songs,
         IMongoCollection<User> users,
         IMongoCollection<History> history,
         IEmailService email,
-        IPasswordHasher hasher)
+        IPasswordHasher hasher,
+        IUserRecommendationService userRecs,
+        ISongService songService)
     {
         _songs = songs;
         _users = users;
         _history = history;
         _email = email;
         _hasher = hasher;
+        _userRecs = userRecs;
+        _songService = songService;
     }
 
     public async Task<SongListResponse> ListSongsAsync(int page, int pageSize, CancellationToken ct = default)
@@ -101,10 +107,11 @@ public class AdminService : IAdminService
             Email = request.Email,
             PasswordHash = _hasher.Hash(request.Password),
             Preference = new List<string>(),
+            EmailVerified = true,
             ReceiveRecommendationEmails = false
         };
         await _users.InsertOneAsync(user, cancellationToken: ct);
-        return new UserMeResponse(user.Id, user.Username, user.Email, user.Preference, user.ReceiveRecommendationEmails, user.ProfileImageUrl);
+        return new UserMeResponse(user.Id, user.Username, user.Email, user.Preference, user.ReceiveRecommendationEmails, user.EmailFrequency, user.LastDetectedEmotion, user.ProfileImageUrl);
     }
 
     public async Task<List<UserMeResponse>> ListUsersAsync(int page, int pageSize, CancellationToken ct = default)
@@ -113,35 +120,37 @@ public class AdminService : IAdminService
             .Skip(page * pageSize)
             .Limit(pageSize)
             .ToListAsync(ct);
-        return list.Select(u => new UserMeResponse(u.Id, u.Username, u.Email, u.Preference, u.ReceiveRecommendationEmails, u.ProfileImageUrl)).ToList();
+        return list.Select(u => new UserMeResponse(u.Id, u.Username, u.Email, u.Preference, u.ReceiveRecommendationEmails, u.EmailFrequency, u.LastDetectedEmotion, u.ProfileImageUrl)).ToList();
     }
 
     public async Task<int> SendRecommendationEmailsNowAsync(CancellationToken ct = default)
     {
-        var users = await _users.Find(u => u.ReceiveRecommendationEmails).ToListAsync(ct);
-        var allSongs = await _songs.Find(FilterDefinition<Song>.Empty).ToListAsync(ct);
+        var users = await _users.Find(u => u.ReceiveRecommendationEmails && u.EmailFrequency != EmailFrequency.Off).ToListAsync(ct);
         var sent = 0;
         foreach (var user in users)
         {
-            var recommended = GetRecommendedSongsForUser(user, allSongs);
+            var recommended = await _userRecs.GetRecommendedSongsForUserAsync(user, 3, ct);
             if (recommended.Count > 0)
             {
-                await _email.SendRecommendationsAsync(user.Email, user.Username, recommended, ct);
+                await _email.SendRecommendationsAsync(user.Email, user.Username, recommended, user.LastDetectedEmotion, ct);
+                await _users.UpdateOneAsync(
+                    u => u.Id == user.Id,
+                    Builders<User>.Update.Set(u => u.LastRecommendationEmailSentAt, DateTime.UtcNow),
+                    cancellationToken: ct);
                 sent++;
             }
         }
         return sent;
     }
 
-    private List<Song> GetRecommendedSongsForUser(User user, List<Song> allSongs)
-    {
-        if (allSongs.Count == 0) return new List<Song>();
-        var byGenre = allSongs.Where(s => s.Genre.Any(g => user.Preference.Contains(g, StringComparer.OrdinalIgnoreCase))).ToList();
-        var pool = byGenre.Count >= 2 ? byGenre : allSongs;
-        var count = Math.Min(3, pool.Count);
-        return pool.OrderBy(_ => Random.Shared.Next()).Take(count).ToList();
-    }
-
-    private static SongResponse ToSongResponse(Song s) =>
-        new(s.Id, s.TrackId, s.Title, s.Artist, s.Genre, s.AudioFeature, s.S3Url, s.CoverUrl);
+    private SongResponse ToSongResponse(Song s) =>
+        new(
+            s.Id,
+            s.TrackId,
+            s.Title,
+            s.Artist,
+            s.Genre,
+            s.AudioFeature,
+            s.S3Url,
+            string.IsNullOrWhiteSpace(s.CoverUrl) ? _songService.BuildCoverProxyUrl(s.TrackId) : s.CoverUrl);
 }

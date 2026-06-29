@@ -19,16 +19,18 @@ class _SignupPageState extends ConsumerState<SignupPage> {
   Future<void> _signup() async {
     setState(() => _isLoading = true);
     try {
-      await ref.read(authProvider.notifier).signup(
+      final result = await ref.read(authProvider.notifier).signup(
             _usernameController.text.trim(),
             _emailController.text.trim(),
             _passwordController.text.trim(),
           );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account created successfully!')),
+          const SnackBar(
+            content: Text('Account created! Check your email for the verification code.'),
+          ),
         );
-        context.go('/');
+        context.go('/verify-otp?email=${Uri.encodeComponent(result.email)}');
       }
     } catch (e) {
       if (mounted) {

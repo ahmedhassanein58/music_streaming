@@ -9,15 +9,6 @@ public interface IEmotionService
     Task<FacialEmotionResult> PredictEmotionAsync(Stream imageStream, string fileName, CancellationToken ct = default);
 }
 
-public sealed class FacialEmotionResult
-{
-    public string FileName { get; set; } = string.Empty;
-    public string PredictedLabel { get; set; } = string.Empty;
-    public int PredictedIndex { get; set; }
-    public IReadOnlyList<double> Probabilities { get; set; } = Array.Empty<double>();
-    public IReadOnlyList<string> Classes { get; set; } = Array.Empty<string>();
-}
-
 public class EmotionService : IEmotionService
 {
     private readonly IHttpClientFactory _httpClientFactory;
@@ -39,22 +30,57 @@ public class EmotionService : IEmotionService
 
         var client = _httpClientFactory.CreateClient("facial-emotion");
         client.BaseAddress ??= new Uri(baseUrl);
+        client.Timeout = TimeSpan.FromSeconds(90);
 
         using var content = new MultipartFormDataContent();
         var streamContent = new StreamContent(imageStream);
-        streamContent.Headers.ContentType = MediaTypeHeaderValue.Parse("image/jpeg");
+        var contentType = GuessImageContentType(fileName);
+        streamContent.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
         content.Add(streamContent, "file", fileName);
 
-        using var response = await client.PostAsync("/emotion/predict", content, ct);
-        response.EnsureSuccessStatusCode();
-
-        var dto = await response.Content.ReadFromJsonAsync<FacialEmotionResult>(cancellationToken: ct);
-        if (dto == null)
+        HttpResponseMessage response;
+        try
         {
-            throw new InvalidOperationException("Failed to deserialize emotion prediction response.");
+            response = await client.PostAsync("/emotion/predict", content, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException(
+                "Facial emotion service is unavailable. Ensure the Python service is running on port 8000 " +
+                $"(cd 'Emotion Detection AI Models/Facial Recognition System' && .venv/bin/python -m uvicorn api:app --port 8000). Details: {ex.Message}",
+                ex);
         }
 
-        return dto;
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(ct);
+                throw new InvalidOperationException(
+                    $"Facial emotion service returned {(int)response.StatusCode}: {body}");
+            }
+
+            var dto = await response.Content.ReadFromJsonAsync<FacialEmotionResult>(cancellationToken: ct);
+            if (dto == null)
+            {
+                throw new InvalidOperationException("Failed to deserialize emotion prediction response.");
+            }
+
+            return dto;
+        }
+    }
+
+    private static string GuessImageContentType(string fileName)
+    {
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        return ext switch
+        {
+            ".png" => "image/png",
+            ".webp" => "image/webp",
+            ".gif" => "image/gif",
+            ".bmp" => "image/bmp",
+            _ => "image/jpeg"
+        };
     }
 }
 

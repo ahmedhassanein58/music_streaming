@@ -6,6 +6,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:music_client/core/models/playlist_model.dart';
 import 'package:music_client/core/models/history_model.dart';
 import 'package:music_client/core/models/song_model.dart';
+import 'package:music_client/core/models/song_playback.dart';
 import 'package:music_client/core/network/playlist_repository.dart';
 import 'package:music_client/core/network/history_repository.dart';
 import 'package:music_client/core/network/song_repository.dart';
@@ -428,13 +429,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     try {
       final song = await _songRepo.getByTrackId(trackId);
       if (song.s3Url.isEmpty) return;
-      final mediaItem = MediaItem(
-        id: song.s3Url,
-        title: song.title,
-        artist: song.artist,
-        album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
-        extras: {'trackId': song.trackId},
-      );
+      final mediaItem = song.toMediaItem();
       await handler.playMediaItem(mediaItem);
       await _recordPlayIfAuthenticated(trackId);
     } catch (_) {
@@ -601,12 +596,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     if (song.s3Url.isEmpty) return;
     try {
       final handler = AppAudioHandler.instance;
-      await handler.playMediaItem(MediaItem(
-        id: song.s3Url,
-        title: song.title,
-        artist: song.artist,
-        album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
-      ));
+      await handler.playMediaItem(song.toMediaItem());
       await widget.onRecordPlay(song.trackId);
     } catch (_) {}
   }
@@ -615,13 +605,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     if (song.s3Url.isEmpty) return;
     try {
       final handler = AppAudioHandler.instance;
-      await handler.addQueueItem(MediaItem(
-        id: song.s3Url,
-        title: song.title,
-        artist: song.artist,
-        album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
-        extras: {'trackId': song.trackId},
-      ));
+      await handler.addQueueItem(song.toMediaItem());
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Added to queue'), behavior: SnackBarBehavior.floating),

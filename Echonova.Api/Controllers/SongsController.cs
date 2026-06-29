@@ -9,10 +9,12 @@ namespace Echonova.Api.Controllers;
 public class SongsController : ControllerBase
 {
     private readonly ISongService _songs;
+    private readonly ICoverArtService _coverArt;
 
-    public SongsController(ISongService songs)
+    public SongsController(ISongService songs, ICoverArtService coverArt)
     {
         _songs = songs;
+        _coverArt = coverArt;
     }
 
     [HttpGet]
@@ -34,6 +36,19 @@ public class SongsController : ControllerBase
         var song = await _songs.GetByTrackIdAsync(trackId, ct);
         if (song == null) return NotFound();
         return Ok(song);
+    }
+
+    [HttpGet("{trackId}/cover.jpg")]
+    public async Task<IActionResult> GetCoverArt(string trackId, CancellationToken ct)
+    {
+        var song = await _songs.GetByTrackIdAsync(trackId, ct);
+        if (song == null) return NotFound();
+
+        var artwork = await _coverArt.ResolveArtworkUrlAsync(trackId, song.Title, song.Artist, ct);
+        if (string.IsNullOrWhiteSpace(artwork))
+            return NotFound();
+
+        return Redirect(artwork);
     }
 
     /// <summary>

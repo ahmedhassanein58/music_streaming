@@ -33,8 +33,19 @@ public class UserService : IUserService
             updates.Add(Builders<User>.Update.Set(u => u.Username, request.Username));
         if (request.Preference != null)
             updates.Add(Builders<User>.Update.Set(u => u.Preference, request.Preference));
-        if (request.ReceiveRecommendationEmails.HasValue)
+
+        if (request.EmailFrequency.HasValue)
+        {
+            updates.Add(Builders<User>.Update.Set(u => u.EmailFrequency, request.EmailFrequency.Value));
+            var receive = request.EmailFrequency.Value != EmailFrequency.Off;
+            updates.Add(Builders<User>.Update.Set(u => u.ReceiveRecommendationEmails, receive));
+        }
+        else if (request.ReceiveRecommendationEmails.HasValue)
+        {
             updates.Add(Builders<User>.Update.Set(u => u.ReceiveRecommendationEmails, request.ReceiveRecommendationEmails.Value));
+            if (!request.ReceiveRecommendationEmails.Value)
+                updates.Add(Builders<User>.Update.Set(u => u.EmailFrequency, EmailFrequency.Off));
+        }
 
         if (updates.Count == 0)
             return await GetMeAsync(userId, ct);
@@ -53,5 +64,6 @@ public class UserService : IUserService
     }
 
     private static UserMeResponse ToResponse(User u) =>
-        new(u.Id, u.Username, u.Email, u.Preference, u.ReceiveRecommendationEmails, u.ProfileImageUrl);
+        new(u.Id, u.Username, u.Email, u.Preference, u.ReceiveRecommendationEmails,
+            u.EmailFrequency, u.LastDetectedEmotion, u.ProfileImageUrl);
 }

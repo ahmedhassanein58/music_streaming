@@ -10,65 +10,74 @@ namespace Echonova.Api.Services;
 public interface IEmailService
 {
     Task SendOtpAsync(string email, string otp, CancellationToken ct = default);
-    Task SendWelcomeAsync(string email, string username, CancellationToken ct = default);
-    Task SendRecommendationsAsync(string email, string username, IReadOnlyList<Song> songs, CancellationToken ct = default);
+    Task SendWelcomeAsync(string email, string username, IReadOnlyList<Song> songs, CancellationToken ct = default);
+    Task SendRecommendationsAsync(
+        string email,
+        string username,
+        IReadOnlyList<Song> songs,
+        string? lastEmotion = null,
+        CancellationToken ct = default);
 }
 
 public class EmailService : IEmailService
 {
-    private readonly SmtpOptions _options;
+    private readonly SmtpOptions _smtp;
+    private readonly AppOptions _app;
 
-    public EmailService(IOptions<SmtpOptions> options)
+    public EmailService(IOptions<SmtpOptions> smtp, IOptions<AppOptions> app)
     {
-        _options = options.Value;
+        _smtp = smtp.Value;
+        _app = app.Value;
     }
 
     private async Task SendAsync(string to, string subject, string body, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(_smtp.Host) || _smtp.Host == "smtp.example.com")
+        {
+            throw new InvalidOperationException(
+                "SMTP is not configured. Set Smtp:Host, Username, and Password in appsettings or user secrets.");
+        }
+
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(_options.FromName, _options.FromAddress));
+        message.From.Add(new MailboxAddress(_smtp.FromName, _smtp.FromAddress));
         message.To.Add(MailboxAddress.Parse(to));
         message.Subject = subject;
         message.Body = new TextPart("html") { Text = body };
 
         using var client = new SmtpClient();
-        var secure = _options.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTlsWhenAvailable;
-        await client.ConnectAsync(_options.Host, _options.Port, secure, ct);
-        if (!string.IsNullOrEmpty(_options.Username))
-            await client.AuthenticateAsync(_options.Username, _options.Password, ct);
+        var secure = _smtp.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTlsWhenAvailable;
+        await client.ConnectAsync(_smtp.Host, _smtp.Port, secure, ct);
+        if (!string.IsNullOrEmpty(_smtp.Username))
+            await client.AuthenticateAsync(_smtp.Username, _smtp.Password, ct);
         await client.SendAsync(message, ct);
         await client.DisconnectAsync(true, ct);
     }
 
-    public Task SendOtpAsync(string email, string otp, CancellationToken ct = default)
-    {
-        var body = $@"
-<html><body>
-<p>Your Echonova verification code is: <strong>{otp}</strong></p>
-<p>It expires in 10 minutes.</p>
-</body></html>";
-        return SendAsync(email, "Your verification code", body, ct);
-    }
+    public Task SendOtpAsync(string email, string otp, CancellationToken ct = default) =>
+        SendAsync(email, "Your Echonova verification code", EmailTemplates.Otp(otp), ct);
 
-    public Task SendWelcomeAsync(string email, string username, CancellationToken ct = default)
-    {
-        var body = $@"
-<html><body>
-<p>Hi {username},</p>
-<p>Welcome to Echonova! Your account has been created.</p>
-</body></html>";
-        return SendAsync(email, "Welcome to Echonova", body, ct);
-    }
+    public Task SendWelcomeAsync(string email, string username, IReadOnlyList<Song> songs, CancellationToken ct = default) =>
+        SendAsync(
+            email,
+            "Welcome to Echonova — your music journey starts here",
+            EmailTemplates.Welcome(username, songs, _app.PublicBaseUrl),
+            ct);
 
-    public Task SendRecommendationsAsync(string email, string username, IReadOnlyList<Song> songs, CancellationToken ct = default)
+    public Task SendRecommendationsAsync(
+        string email,
+        string username,
+        IReadOnlyList<Song> songs,
+        string? lastEmotion = null,
+        CancellationToken ct = default)
     {
-        var list = string.Join("", songs.Take(3).Select(s => $"<li><strong>{s.Title}</strong> by {s.Artist} - <a href=\"{s.S3Url}\">Listen</a></li>"));
-        var body = $@"
-<html><body>
-<p>Hi {username},</p>
-<p>Here are some songs we think you'll like:</p>
-<ul>{list}</ul>
-</body></html>";
-        return SendAsync(email, "Your music recommendations", body, ct);
+        var subject = !string.IsNullOrWhiteSpace(lastEmotion)
+            ? $"Your {lastEmotion} mood playlist from Echonova"
+            : "Fresh picks from Echonova";
+
+        return SendAsync(
+            email,
+            subject,
+            EmailTemplates.Recommendations(username, songs, lastEmotion, _app.PublicBaseUrl),
+            ct);
     }
 }

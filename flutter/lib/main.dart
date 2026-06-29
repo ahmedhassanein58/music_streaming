@@ -8,7 +8,9 @@ import 'package:music_client/Pages/search/search_page.dart';
 import 'package:music_client/Pages/library/library_page.dart';
 import 'package:music_client/Pages/login_page.dart';
 import 'package:music_client/Pages/signup.dart';
+import 'package:music_client/Pages/verify_otp_page.dart';
 import 'package:music_client/Pages/profile_page.dart';
+import 'package:music_client/Pages/mood_scan_page.dart';
 import 'package:music_client/audio_service.dart';
 import 'package:music_client/core/theme.dart';
 
@@ -41,8 +43,19 @@ final GoRouter _router = GoRouter(
       builder: (context, state) => const SignupPage(),
     ),
     GoRoute(
+      path: '/verify-otp',
+      builder: (context, state) {
+        final email = state.uri.queryParameters['email'] ?? '';
+        return VerifyOtpPage(email: email);
+      },
+    ),
+    GoRoute(
       path: '/profile',
       builder: (context, state) => const ProfilePage(),
+    ),
+    GoRoute(
+      path: '/mood-scan',
+      builder: (context, state) => const MoodScanPage(),
     ),
   ],
 );

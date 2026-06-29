@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/models/auth_models.dart';
 import '../core/providers/auth_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -27,6 +28,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           const SnackBar(content: Text('Logged in successfully!')),
         );
         context.go('/');
+      }
+    } on EmailNotVerifiedException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+        context.go(
+          '/verify-otp?email=${Uri.encodeComponent(_emailController.text.trim())}',
+        );
       }
     } catch (e) {
       if (mounted) {

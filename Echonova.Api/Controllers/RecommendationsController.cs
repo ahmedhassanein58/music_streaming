@@ -13,11 +13,16 @@ public class RecommendationsController : ControllerBase
 {
     private readonly IRecommendationService _recommendations;
     private readonly IHistoryService _history;
+    private readonly IEmotionRecommendationService _emotionRecommendations;
 
-    public RecommendationsController(IRecommendationService recommendations, IHistoryService history)
+    public RecommendationsController(
+        IRecommendationService recommendations,
+        IHistoryService history,
+        IEmotionRecommendationService emotionRecommendations)
     {
         _recommendations = recommendations;
         _history = history;
+        _emotionRecommendations = emotionRecommendations;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -59,6 +64,19 @@ public class RecommendationsController : ControllerBase
             return BadRequest("N must be between 1 and 100.");
 
         var items = await _recommendations.RecommendFromMultipleAsync(request.TrackIds, request.N, ct);
+        return Ok(new RecommendationListResponse(items));
+    }
+
+    /// <summary>
+    /// Recommend songs based on a facial emotion label (happy, sad, angry, etc.).
+    /// </summary>
+    [HttpGet("by-emotion/{label}")]
+    public async Task<IActionResult> RecommendByEmotion(string label, [FromQuery] int n = 10, CancellationToken ct = default)
+    {
+        if (n <= 0 || n > 100)
+            return BadRequest("N must be between 1 and 100.");
+
+        var items = await _emotionRecommendations.RecommendByEmotionAsync(UserId, label, n, ct);
         return Ok(new RecommendationListResponse(items));
     }
 }

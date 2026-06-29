@@ -1,25 +1,34 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "music_client",
+            "name": "music_client (Chrome)",
             "request": "launch",
-            "type": "dart"
+            "type": "dart",
+            "deviceId": "chrome",
+            "args": ["--web-port=8080"]
+        },
+        {
+            "name": "music_client (Linux desktop)",
+            "request": "launch",
+            "type": "dart",
+            "deviceId": "linux"
         },
         {
             "name": "music_client (profile mode)",
             "request": "launch",
             "type": "dart",
-            "flutterMode": "profile"
+            "deviceId": "chrome",
+            "flutterMode": "profile",
+            "args": ["--web-port=8080"]
         },
         {
             "name": "music_client (release mode)",
             "request": "launch",
             "type": "dart",
-            "flutterMode": "release"
+            "deviceId": "chrome",
+            "flutterMode": "release",
+            "args": ["--web-port=8080"]
         }
     ]
 }

@@ -28,9 +28,11 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken ct)
     {
         var result = await _auth.LoginAsync(request, ct);
-        if (result == null)
+        if (result.EmailNotVerified)
+            return StatusCode(403, new { message = "Verify your email with the OTP we sent before logging in.", code = "EMAIL_NOT_VERIFIED" });
+        if (result.Response == null)
             return Unauthorized(new { message = "Invalid email or password." });
-        return Ok(result);
+        return Ok(result.Response);
     }
 
     [HttpPost("send-otp")]
@@ -45,9 +47,9 @@ public class AuthController : ControllerBase
     [HttpPost("verify-otp")]
     public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest request, CancellationToken ct)
     {
-        var valid = await _auth.VerifyOtpAsync(request.Email, request.Otp, ct);
-        if (!valid)
+        var result = await _auth.VerifyOtpAsync(request.Email, request.Otp, ct);
+        if (result == null)
             return BadRequest(new { message = "Invalid or expired OTP." });
-        return Ok(new { message = "OTP verified." });
+        return Ok(result);
     }
 }

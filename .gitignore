@@ -1,2 +1,16 @@
 /build
-.gitignore
+
+# .NET build outputs
+**/bin/
+**/obj/
+
+# Python
+**/__pycache__/
+*.pyc
+**/.venv/
+
+# Linux crash dumps (accidental core files)
+core.[0-9]*
+
+# ML model weights — download separately (see HOW_TO_USE.md)
+**/model_weights.weights.h5

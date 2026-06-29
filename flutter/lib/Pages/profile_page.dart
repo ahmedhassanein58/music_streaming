@@ -14,7 +14,7 @@ class ProfilePage extends ConsumerStatefulWidget {
 
 class _ProfilePageState extends ConsumerState<ProfilePage> {
   late TextEditingController _usernameController;
-  bool _receiveEmails = false;
+  EmailFrequency _emailFrequency = EmailFrequency.off;
   bool _isSaving = false;
   bool _isUploadingImage = false;
   final UserRepository _userRepo = UserRepository();
@@ -25,7 +25,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     super.initState();
     final user = ref.read(authProvider).user;
     _usernameController = TextEditingController(text: user?.username ?? '');
-    _receiveEmails = user?.receiveRecommendationEmails ?? false;
+    _emailFrequency = user?.emailFrequency ?? EmailFrequency.off;
   }
 
   @override
@@ -39,7 +39,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     try {
       final request = UpdateMeRequest(
         username: _usernameController.text.trim(),
-        receiveRecommendationEmails: _receiveEmails,
+        emailFrequency: _emailFrequency,
+        receiveRecommendationEmails: _emailFrequency != EmailFrequency.off,
       );
       await ref.read(authProvider.notifier).updateUser(request);
       if (mounted) {
@@ -228,13 +229,30 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-          SwitchListTile(
-            title: const Text('Receive Recommendation Emails'),
-            subtitle: const Text('Get personalized music recommendations in your inbox'),
-            value: _receiveEmails,
-            onChanged: (value) => setState(() => _receiveEmails = value),
-            activeColor: Theme.of(context).colorScheme.primary,
+          DropdownButtonFormField<EmailFrequency>(
+            initialValue: _emailFrequency,
+            decoration: const InputDecoration(
+              labelText: 'Recommendation Email Frequency',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.mail_outline),
+              helperText: 'Song recommendations sent via Gmail',
+            ),
+            items: EmailFrequency.values
+                .map((f) => DropdownMenuItem(value: f, child: Text(f.label)))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) setState(() => _emailFrequency = value);
+            },
           ),
+          if (user.lastDetectedEmotion != null && user.lastDetectedEmotion!.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.face, color: Colors.white70),
+              title: const Text('Last detected mood'),
+              subtitle: Text(user.lastDetectedEmotion!),
+            ),
+          ],
           const SizedBox(height: 40),
           ElevatedButton(
             onPressed: _isSaving ? null : _saveProfile,

@@ -14,6 +14,7 @@ BsonClassMap.RegisterClassMap<Song>(cm =>
     cm.AutoMap();
     cm.SetIgnoreExtraElements(true);
     cm.MapIdMember(s => s.Id).SetSerializer(new GuidAcceptingObjectIdSerializer());
+    cm.MapMember(s => s.AudioFeature).SetSerializer(new AudioFeatureSerializer());
 });
 
 // Ignore extra elements in embedded docs (e.g. s3_url stored inside audio_feature in some documents)
@@ -51,15 +52,29 @@ BsonClassMap.RegisterClassMap<History>(cm =>
 });
 var builder = WebApplication.CreateBuilder(args);
 
+// Optional: override MongoDB connection from environment (e.g. export MONGODB_URI="mongodb+srv://...")
+var mongoUri = Environment.GetEnvironmentVariable("MONGODB_URI");
+if (!string.IsNullOrWhiteSpace(mongoUri))
+{
+    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        [$"{MongoDbOptions.SectionName}:ConnectionString"] = mongoUri
+    });
+}
+
 builder.Services.Configure<MongoDbOptions>(builder.Configuration.GetSection(MongoDbOptions.SectionName));
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.SectionName));
 builder.Services.Configure<AwsOptions>(builder.Configuration.GetSection(AwsOptions.SectionName));
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.SectionName));
 builder.Services.Configure<MlServicesOptions>(builder.Configuration.GetSection(MlServicesOptions.SectionName));
+builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.SectionName));
 
 builder.Services.AddMongoDb(builder.Configuration);
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient<ICoverArtService, CoverArtService>();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
 builder.Services.AddSingleton<IJwtService, JwtService>();
 builder.Services.AddSingleton<IEmailService, EmailService>();
@@ -72,7 +87,10 @@ builder.Services.AddScoped<IHistoryService, HistoryService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 builder.Services.AddScoped<IEmotionService, EmotionService>();
+builder.Services.AddScoped<IEmotionRecommendationService, EmotionRecommendationService>();
+builder.Services.AddScoped<IUserRecommendationService, UserRecommendationService>();
 builder.Services.AddScoped<IProfileImageStorageService, LocalProfileImageStorageService>();
+builder.Services.AddHostedService<RecommendationEmailBackgroundService>();
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -116,6 +134,7 @@ builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>

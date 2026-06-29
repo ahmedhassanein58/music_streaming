@@ -10,15 +10,29 @@ public interface ISongService
     Task<SongResponse?> GetByTrackIdAsync(string trackId, CancellationToken ct = default);
     Task<IReadOnlyList<SongResponse>> GetByTrackIdsAsync(IEnumerable<string> trackIds, CancellationToken ct = default);
     Task<SongResponse?> GetByTitleAndArtistAsync(string title, string artist, CancellationToken ct = default);
+    string BuildCoverProxyUrl(string trackId);
 }
 
 public class SongService : ISongService
 {
     private readonly IMongoCollection<Song> _songs;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public SongService(IMongoCollection<Song> songs)
+    public SongService(IMongoCollection<Song> songs, IHttpContextAccessor httpContextAccessor)
     {
         _songs = songs;
+        _httpContextAccessor = httpContextAccessor;
+    }
+
+    public string BuildCoverProxyUrl(string trackId) =>
+        $"{GetApiBaseUrl()}/songs/{Uri.EscapeDataString(trackId)}/cover.jpg";
+
+    private string GetApiBaseUrl()
+    {
+        var request = _httpContextAccessor.HttpContext?.Request;
+        if (request != null)
+            return $"{request.Scheme}://{request.Host}";
+        return "http://localhost:5186";
     }
 
     public async Task<SongListResponse> ListAsync(string? genre, string? search, int page, int pageSize, CancellationToken ct = default)
@@ -39,7 +53,7 @@ public class SongService : ISongService
             .Skip(page * pageSize)
             .Limit(pageSize)
             .ToListAsync(ct);
-        return new SongListResponse(items.Select(ToResponse).ToList(), (int)total);
+        return new SongListResponse(items.Select(s => ToResponse(s)).ToList(), (int)total);
     }
 
     public async Task<SongResponse?> GetByTrackIdAsync(string trackId, CancellationToken ct = default)
@@ -69,7 +83,7 @@ public class SongService : ISongService
         return song == null ? null : ToResponse(song);
     }
 
-    private static SongResponse ToResponse(Song s)
+    private SongResponse ToResponse(Song s)
     {
         var af = s.AudioFeature;
         var audioFeature = new AudioFeature
@@ -83,6 +97,14 @@ public class SongService : ISongService
             Tempo = af?.Tempo ?? 0,
             Valence = af?.Valence ?? 0
         };
-        return new SongResponse(s.Id, s.TrackId, s.Title, s.Artist, s.Genre ?? new List<string>(), audioFeature, s.S3Url ?? string.Empty, s.CoverUrl);
+        return new SongResponse(
+            s.Id,
+            s.TrackId,
+            s.Title,
+            s.Artist,
+            s.Genre ?? new List<string>(),
+            audioFeature,
+            s.S3Url ?? string.Empty,
+            string.IsNullOrWhiteSpace(s.CoverUrl) ? BuildCoverProxyUrl(s.TrackId) : s.CoverUrl);
     }
 }

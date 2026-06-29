@@ -50,6 +50,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final user = await _userRepository.getCurrentUser();
       state = AuthState.authenticated(user);
     } catch (e) {
+      await _storage.clear();
       state = AuthState.guest();
     }
   }
@@ -60,24 +61,38 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _authService.login(LoginRequest(email: email, password: password));
       final user = await _userRepository.getCurrentUser();
       state = AuthState.authenticated(user);
+    } on EmailNotVerifiedException {
+      state = AuthState.guest();
+      rethrow;
     } catch (e) {
       state = AuthState.error(e.toString());
+      rethrow;
     }
   }
 
-  Future<void> signup(String username, String email, String password) async {
+  Future<SignupResponse> signup(
+      String username, String email, String password) async {
+    return _authService.signup(SignupRequest(
+      username: username,
+      email: email,
+      password: password,
+    ));
+  }
+
+  Future<void> verifyOtp(String email, String otp) async {
     state = AuthState.loading();
     try {
-      await _authService.signup(SignupRequest(
-        username: username,
-        email: email,
-        password: password,
-      ));
+      await _authService.verifyOtp(email, otp);
       final user = await _userRepository.getCurrentUser();
       state = AuthState.authenticated(user);
     } catch (e) {
-      state = AuthState.error(e.toString());
+      state = AuthState.guest();
+      rethrow;
     }
+  }
+
+  Future<void> resendOtp(String email) async {
+    await _authService.resendOtp(email);
   }
 
   Future<void> logout() async {
@@ -101,7 +116,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
 }
 
 final authServiceProvider = StateProvider<AuthService>((ref) => AuthService());
-final userRepositoryProvider = StateProvider<UserRepository>((ref) => UserRepository());
+final userRepositoryProvider =
+    StateProvider<UserRepository>((ref) => UserRepository());
 final tokenStorageProvider = StateProvider<TokenStorage>((ref) => TokenStorage());
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {

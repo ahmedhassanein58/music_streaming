@@ -6,6 +6,7 @@ import 'package:music_client/audio_service.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:music_client/core/models/playlist_model.dart';
 import 'package:music_client/core/models/song_model.dart';
+import 'package:music_client/core/models/song_playback.dart';
 import 'package:music_client/core/network/playlist_repository.dart';
 import 'package:music_client/core/network/song_repository.dart';
 import 'package:music_client/core/network/history_repository.dart';
@@ -141,12 +142,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
     try {
       final handler = AppAudioHandler.instance;
-      final mediaItem = MediaItem(
-        id: song.s3Url,
-        title: song.title,
-        artist: song.artist,
-        album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
-      );
+      final mediaItem = song.toMediaItem();
       handler.playMediaItem(mediaItem).catchError((e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -168,12 +164,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     if (song.s3Url.isEmpty) return;
     try {
       final handler = AppAudioHandler.instance;
-      final mediaItem = MediaItem(
-        id: song.s3Url,
-        title: song.title,
-        artist: song.artist,
-        album: song.genre.isNotEmpty ? song.genre.join(', ') : null,
-      );
+      final mediaItem = song.toMediaItem();
       await handler.addQueueItem(mediaItem);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
