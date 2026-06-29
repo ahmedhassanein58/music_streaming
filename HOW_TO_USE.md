@@ -236,6 +236,7 @@ cd flutter && flutter pub get && flutter run -d linux
 | Feature | Where |
 |---------|--------|
 | **Mood Scan** | Home → "Scan Your Mood" card, or `/mood-scan` |
+| **Song Identify** | Home → "Identify a Song" card, or `/identify` |
 | **Emotion → genre recs** | Detects happy/sad/angry/etc. and recommends matching genres |
 | **Email frequency** | Profile → Daily / Weekly / Monthly / Off |
 | **Scheduled emails** | Backend sends digests automatically (checks every hour) |
@@ -259,6 +260,7 @@ See `scripts/README.md` for details.
 
 - [ ] `curl http://localhost:8000/health` returns `"model_ready": true`
 - [ ] Mood Scan detects emotion and shows song recommendations
+- [ ] Song Identify opens mic UI and shows "Song not found" (stub; no live recognition yet)
 - [ ] Home "Suggested for you" works when logged in with play history
 - [ ] Profile saves email frequency
 - [ ] Welcome email arrives after signup (with Gmail configured)

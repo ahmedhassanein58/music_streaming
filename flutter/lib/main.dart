@@ -11,6 +11,7 @@ import 'package:music_client/Pages/signup.dart';
 import 'package:music_client/Pages/verify_otp_page.dart';
 import 'package:music_client/Pages/profile_page.dart';
 import 'package:music_client/Pages/mood_scan_page.dart';
+import 'package:music_client/Pages/identify_song_page.dart';
 import 'package:music_client/audio_service.dart';
 import 'package:music_client/core/theme.dart';
 
@@ -56,6 +57,10 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/mood-scan',
       builder: (context, state) => const MoodScanPage(),
+    ),
+    GoRoute(
+      path: '/identify',
+      builder: (context, state) => const IdentifySongPage(),
     ),
   ],
 );

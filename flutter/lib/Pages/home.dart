@@ -268,6 +268,8 @@ class _HomePageState extends ConsumerState<HomePage> {
               sections.add(const _WelcomeSection());
               sections.add(const SizedBox(height: 20));
               sections.add(const _MoodScanCard());
+              sections.add(const SizedBox(height: 16));
+              sections.add(const _IdentifySongCard());
               sections.add(const SizedBox(height: 28));
               if (suggested.isNotEmpty) {
                 sections.add(_SectionTitle('Suggested for you'));
@@ -756,6 +758,61 @@ class _MoodScanCard extends ConsumerWidget {
                       auth.status == AuthStatus.authenticated
                           ? 'Detect emotion and get genre-matched picks'
                           : 'Sign in to unlock mood-based recommendations',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.grey[600]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IdentifySongCard extends StatelessWidget {
+  const _IdentifySongCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return Material(
+      color: const Color(0xFF1F2937),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => context.push('/identify'),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.mic, color: primary, size: 32),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Identify a Song',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Listen and find tracks in our catalog',
                       style: TextStyle(fontSize: 13, color: Colors.grey[400]),
                     ),
                   ],
